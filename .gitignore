@@ -1,0 +1,37 @@
+/target
+**/*.rs.bk
+
+# Frontend
+/frontend/node_modules
+/frontend/build
+/frontend/.svelte-kit
+/frontend/.vite
+
+# Local data
+/data
+*.hzr
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Editor
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# Env
+.env
+.env.local
+
+# Local-only tooling config
+.claude/
+
+# Packaging output
+/dist/
+
+# Logs / cores
+*.log
+core.*
+Thumbs.db

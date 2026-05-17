@@ -1,0 +1,348 @@
+<script lang="ts">
+  import { page } from '$app/state';
+  import { untrack } from 'svelte';
+  import { api, type Host, type SeriesResp, type StorageSettings } from '$lib/api';
+  import { isAbortError, loadSeries, samplesForWidth } from '$lib/series';
+  import SmokeChart from '$lib/components/SmokeChart.svelte';
+  import SmallMultiples from '$lib/components/SmallMultiples.svelte';
+
+  let hostUuid = $derived(page.params.uuid);
+  let host = $state<Host | null>(null);
+  let storage = $state<StorageSettings | null>(null);
+  let err = $state<string | null>(null);
+  // Sample budget derived from chart pixel width via `samplesForWidth`. The
+  // formula targets ~6 px per bucket so the visible cells render roughly as
+  // squares (matching the 5 px median-line thickness) instead of as narrow
+  // 1 px slivers.
+  let chartWrapper: HTMLDivElement | undefined = $state();
+  let targetSamples = $state(samplesForWidth(800));
+
+  type Preset = { label: string; spanSecs: number };
+  // `max` is a sentinel - its actual span is `toSecs - host.created_at`,
+  // resolved in the `fromSecs` derivation. The placeholder value is a
+  // sensible fallback used when the host record hasn't loaded yet.
+  const PRESETS: Preset[] = [
+    { label: '30m', spanSecs: 30 * 60 },
+    { label: '3h', spanSecs: 3 * 3600 },
+    { label: '12h', spanSecs: 12 * 3600 },
+    { label: '24h', spanSecs: 24 * 3600 },
+    { label: '7d', spanSecs: 7 * 86_400 },
+    { label: '30d', spanSecs: 30 * 86_400 },
+    { label: '1y', spanSecs: 365 * 86_400 },
+    { label: '5y', spanSecs: 5 * 365 * 86_400 },
+    { label: 'max', spanSecs: 10 * 365 * 86_400 }
+  ];
+
+  let preset = $state<Preset>(PRESETS[0]);
+  let toSecs = $state<number>(Math.floor(Date.now() / 1000));
+  let fromSecs = $derived.by(() => {
+    if (preset.label === 'max') {
+      // "max" = the storage retention horizon (the largest `max_age_secs`
+      // across the configured retention tiers). Older data has been deleted
+      // by the compactor, so asking for anything further back just shows
+      // empty space. Cap to host.created_at: no data ever existed before it.
+      const horizon = retentionHorizonSecs();
+      let from = toSecs - horizon;
+      if (host && host.created_at > from) from = host.created_at;
+      return from;
+    }
+    return toSecs - preset.spanSecs;
+  });
+
+  function retentionHorizonSecs(): number {
+    if (!storage || storage.retention_tiers.length === 0) {
+      // Fallback while storage settings are still loading: 5 years matches
+      // the default last tier so the user doesn't see the chart jump when
+      // the real value arrives.
+      return 5 * 365 * 86_400;
+    }
+    return Math.max(
+      ...storage.retention_tiers.map((t) => t.max_age_secs)
+    );
+  }
+  let series = $state<SeriesResp | null>(null);
+  let loading = $state(false);
+
+  async function loadHost() {
+    if (!hostUuid) return;
+    try {
+      host = await api.getHost(hostUuid);
+    } catch (e) {
+      err = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async function loadStorageSettings() {
+    // Storage settings drive the "max" preset's lower bound. The endpoint
+    // is gated on "any logged-in user", not admin, so this is safe to call
+    // from the host detail page regardless of role.
+    try {
+      storage = await api.getStorageSettings();
+    } catch {
+      // Non-fatal: the fallback retention horizon will be used.
+    }
+  }
+
+  async function refreshSeries() {
+    if (!hostUuid) return;
+    loading = true;
+    err = null;
+    try {
+      series = await loadSeries({ hostUuid, fromSecs, toSecs, targetSamples });
+    } catch (e) {
+      // A newer refresh (live tick, zoom, preset) aborted this one - the
+      // newer call will land and update state, so we silently drop the
+      // abort instead of flashing an error.
+      if (isAbortError(e)) return;
+      err = e instanceof Error ? e.message : String(e);
+    } finally {
+      loading = false;
+    }
+  }
+
+  function refreshNow() {
+    toSecs = Math.floor(Date.now() / 1000);
+    void refreshSeries();
+  }
+
+  function selectPreset(p: Preset) {
+    preset = p;
+    // Picking a preset means "follow now again" - re-anchor toSecs to
+    // wall-clock and re-enable live mode so the visible window stays
+    // synchronised.
+    live = true;
+    refreshNow();
+  }
+
+  function onZoom(zoomFrom: number, zoomTo: number) {
+    // Replace the visible window with the dragged selection. Width determines
+    // the (virtual) preset; we synthesise a custom span. Disable live since
+    // the user is now inspecting a fixed historical window.
+    live = false;
+    toSecs = zoomTo;
+    preset = { label: 'custom', spanSecs: zoomTo - zoomFrom };
+    void refreshSeries();
+  }
+
+  function toggleLive() {
+    live = !live;
+    if (live) {
+      // Re-anchor to wall clock and grab fresh data immediately so the
+      // chart doesn't have a stale right edge until the next 5 s tick.
+      refreshNow();
+    }
+  }
+
+  // Human-readable display of the currently visible window. Compresses to
+  // "HH:MM:SS - HH:MM:SS" when both endpoints fall on the same calendar day,
+  // and expands to full dates when they don't.
+  function formatRange(from: number, to: number): string {
+    const fromD = new Date(from * 1000);
+    const toD = new Date(to * 1000);
+    const sameDay =
+      fromD.getFullYear() === toD.getFullYear() &&
+      fromD.getMonth() === toD.getMonth() &&
+      fromD.getDate() === toD.getDate();
+    const dateOpts: Intl.DateTimeFormatOptions = {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit'
+    };
+    const timeOpts: Intl.DateTimeFormatOptions = {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    };
+    if (sameDay) {
+      const date = fromD.toLocaleDateString(undefined, dateOpts);
+      return `${date}  ${fromD.toLocaleTimeString(undefined, timeOpts)} → ${toD.toLocaleTimeString(
+        undefined,
+        timeOpts
+      )}`;
+    }
+    return `${fromD.toLocaleDateString(undefined, dateOpts)} ${fromD.toLocaleTimeString(
+      undefined,
+      timeOpts
+    )} → ${toD.toLocaleDateString(undefined, dateOpts)} ${toD.toLocaleTimeString(
+      undefined,
+      timeOpts
+    )}`;
+  }
+
+  $effect(() => {
+    // Read hostUuid at the top so it's the ONLY tracked dependency.
+    // Everything inside `untrack` is invisible to Svelte's reactivity graph
+    // - otherwise `refreshSeries()` would synchronously read fromSecs /
+    // toSecs / targetSamples while building its request, making this effect
+    // re-fire on every live tick and null out `series`.
+    const u = hostUuid;
+    if (!u) return;
+    untrack(() => {
+      host = null;
+      series = null;
+      err = null;
+      void loadHost();
+      void loadStorageSettings();
+      void refreshSeries();
+    });
+  });
+
+  // Resize observer for the chart wrapper. Updates `targetSamples` whenever
+  // the visible width changes by a meaningful amount; debounced so frequent
+  // window-drag events don't spam fetches. The series cache absorbs the noise
+  // when a width change doesn't cross a bucket boundary.
+  $effect(() => {
+    if (!chartWrapper) return;
+    let pending: ReturnType<typeof setTimeout> | undefined;
+    const ro = new ResizeObserver((entries) => {
+      const w = Math.round(entries[0].contentRect.width);
+      const next = samplesForWidth(w);
+      if (next === targetSamples) return;
+      if (pending) clearTimeout(pending);
+      pending = setTimeout(() => {
+        targetSamples = next;
+      }, 200);
+    });
+    ro.observe(chartWrapper);
+    return () => {
+      ro.disconnect();
+      if (pending) clearTimeout(pending);
+    };
+  });
+
+  // Re-fetch the series whenever the chosen sample budget changes, but only
+  // after the host has loaded. The series cache short-circuits requests that
+  // resolve to the same bucket-aligned range. Same untrack pattern as above:
+  // refreshSeries reads other state internally, but we don't want this effect
+  // to re-fire on every live tick.
+  $effect(() => {
+    const u = hostUuid;
+    const target = targetSamples;
+    if (!u || target <= 0) return;
+    untrack(() => {
+      void refreshSeries();
+    });
+  });
+
+  // Live mode: when the user is looking at a preset window (anchored at
+  // "now"), `live` is on. The visible clock ticks every second so users see
+  // the right edge advance in real time, and a slower interval re-fetches
+  // the series so new samples appear as the prober writes them.
+  //
+  // The user can toggle live off explicitly with the pin button; it also
+  // turns off automatically whenever they switch to a custom (zoomed)
+  // window, since that's clearly inspecting historical data.
+  let live = $state(true);
+
+  // Drives the right-edge clock. Bound to `toSecs` via the effect below so
+  // the chart always renders "now" at the right edge while live is on.
+  let nowTick = $state<number>(Math.floor(Date.now() / 1000));
+  $effect(() => {
+    if (!live) return;
+    const t = setInterval(() => {
+      nowTick = Math.floor(Date.now() / 1000);
+    }, 1_000);
+    return () => clearInterval(t);
+  });
+
+  // Push the ticking clock into `toSecs` while live. `$effect` re-runs when
+  // `nowTick` or `live` change, so the chart's pinned x-window slides
+  // forward each second without re-fetching.
+  $effect(() => {
+    if (!live) return;
+    toSecs = nowTick;
+  });
+
+  // Periodic re-fetch on a coarser cadence than the visual clock - one
+  // request per chart redraw is enough; we don't need to hammer the API
+  // every second. 5 s gives crisp follow-along without thundering.
+  $effect(() => {
+    if (!hostUuid) return;
+    if (!live) return;
+    const interval = setInterval(() => {
+      void refreshSeries();
+    }, 5_000);
+    return () => clearInterval(interval);
+  });
+</script>
+
+<div class="p-4">
+  {#if err}
+    <p class="text-xs mb-2" style="color: var(--latency-bad)">{err}</p>
+  {/if}
+
+  {#if host}
+    <header class="mb-3">
+      <h1 class="text-sm font-semibold">{host.display_name}</h1>
+      <div class="text-xs flex items-center gap-2 mt-0.5" style="color: var(--muted)">
+        <span class="px-1 rounded" style="background: var(--border); color: var(--fg)">
+          {host.probe_type}
+        </span>
+        <span>·</span>
+        <span>every {host.interval_secs}s × {host.samples_per_period} samples</span>
+      </div>
+    </header>
+
+    <div class="flex items-center gap-1 mb-2">
+      {#each PRESETS as p}
+        <button
+          type="button"
+          onclick={() => selectPreset(p)}
+          class="px-2 py-0.5 rounded text-xs"
+          style="background: {preset === p ? 'var(--accent)' : 'var(--border)'}; color: {preset === p ? '#0b0d10' : 'var(--fg)'}"
+        >
+          {p.label}
+        </button>
+      {/each}
+      <button
+        type="button"
+        onclick={refreshNow}
+        class="ml-2 px-2 py-0.5 rounded text-xs"
+        style="background: var(--border); color: var(--fg)"
+        title="Refresh now"
+      >
+        ↻
+      </button>
+      <button
+        type="button"
+        onclick={toggleLive}
+        class="px-2 py-0.5 rounded text-xs flex items-center gap-1"
+        style="background: {live ? 'var(--latency-good)' : 'var(--border)'}; color: {live ? '#0b0d10' : 'var(--fg)'}"
+        title={live ? 'Pause live follow' : 'Resume live follow'}
+      >
+        <span
+          class="inline-block rounded-full"
+          style="width: 6px; height: 6px; background: {live ? '#0b0d10' : 'var(--muted)'}; {live ? 'animation: haze-pulse 1.2s ease-in-out infinite' : ''}"
+        ></span>
+        {live ? 'LIVE' : 'PAUSED'}
+      </button>
+      <span class="ml-auto text-xs mono" style="color: var(--muted)">
+        {formatRange(fromSecs, toSecs)}
+        {#if loading}
+          <span class="ml-2 text-[10px]">loading…</span>
+        {/if}
+      </span>
+    </div>
+
+    <div bind:this={chartWrapper} class="border rounded p-2" style="border-color: var(--border)">
+      {#if series}
+        <!-- Pin the chart's x-axis to the requested window so zoom-out past
+             the available data still draws the full window with empty space
+             on the left, and so zoom-in to a custom range exactly matches
+             what the user dragged. -->
+        <SmokeChart {series} {onZoom} xMin={fromSecs} xMax={toSecs} height={260} />
+      {:else if loading}
+        <p class="text-xs p-4" style="color: var(--muted)">Loading…</p>
+      {:else}
+        <p class="text-xs p-4" style="color: var(--muted)">
+          Waiting for the first probe to complete - data will appear after one probe interval.
+        </p>
+      {/if}
+    </div>
+
+    <SmallMultiples hostUuid={host.uuid} {onZoom} />
+  {:else}
+    <p class="text-xs" style="color: var(--muted)">Loading…</p>
+  {/if}
+</div>

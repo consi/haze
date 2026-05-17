@@ -1,0 +1,32 @@
+[package]
+name = "haze-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+haze-store = { path = "../haze-store" }
+haze-probe = { path = "../haze-probe" }
+haze-auth = { path = "../haze-auth" }
+haze-alert = { path = "../haze-alert" }
+
+webauthn-rs = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+utoipa = { workspace = true }
+utoipa-axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+http = { workspace = true }
+sqlx = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tower = { workspace = true }

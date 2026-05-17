@@ -1,0 +1,14 @@
+# Clippy project config. Most lint levels live in Cargo.toml's
+# `[workspace.lints]`; this file is for per-lint behavioural knobs.
+
+# Cognitive complexity threshold (default 25 is too strict for state machines
+# like the storage downsampler).
+cognitive-complexity-threshold = 40
+
+# Allow some single-character names where math notation is conventional.
+single-char-binding-names-threshold = 5
+
+# Default panic policy in tests — keep unwrap/expect freely available there.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true

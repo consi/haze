@@ -1,0 +1,78 @@
+[package]
+name = "haze-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Network latency monitor with smoke-style UI and embedded frontend"
+
+[[bin]]
+name = "haze"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+haze-server = { path = "../haze-server" }
+haze-store = { path = "../haze-store" }
+haze-auth = { path = "../haze-auth" }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "signal"] }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# webauthn-rs pulls in openssl-sys transitively (attestation-cert verification).
+# Force the vendored feature so static musl release builds compile OpenSSL from
+# source instead of looking for libssl-dev on the host. Cargo's feature
+# unification makes this propagate to every consumer of openssl-sys.
+openssl-sys = { version = "0.9", features = ["vendored"] }
+
+# ─── Packaging metadata ─────────────────────────────────────────────────────
+# Consumed by `cargo deb` and `cargo generate-rpm` during release builds.
+
+[package.metadata.deb]
+name = "haze"
+maintainer = "consi <wajdzik.m@gmail.com>"
+copyright = "2026, consi <wajdzik.m@gmail.com>"
+license-file = ["../../LICENSE", "0"]
+extended-description = """\
+Haze is a network latency monitor. It probes hosts on a schedule using \
+ICMP, DNS, TCP, TLS, or HTTP, and renders the resulting latency \
+distribution as a smoke-style graph (median plus percentile bands whose \
+opacity reflects packet loss). Ships as a single static binary with an \
+embedded SvelteKit UI."""
+depends = "$auto, systemd"
+section = "net"
+priority = "optional"
+assets = [
+    ["../../target/release/haze", "usr/bin/", "755"],
+    ["../../packaging/haze.env.example", "etc/haze/haze.env.example", "644"],
+    ["../../LICENSE", "usr/share/doc/haze/LICENSE", "644"],
+    ["../../README.md", "usr/share/doc/haze/README.md", "644"],
+]
+conf-files = ["/etc/haze/haze.env.example"]
+
+[package.metadata.deb.systemd-units]
+unit-scripts = "../../packaging/systemd"
+enable = false
+start = false
+
+[package.metadata.generate-rpm]
+name = "haze"
+license = "AGPL-3.0-or-later"
+summary = "Network latency monitor with embedded UI"
+assets = [
+    { source = "target/release/haze", dest = "/usr/bin/haze", mode = "755" },
+    { source = "packaging/systemd/haze.service", dest = "/lib/systemd/system/haze.service", mode = "644" },
+    { source = "packaging/haze.env.example", dest = "/etc/haze/haze.env.example", mode = "644", config = true },
+    { source = "LICENSE", dest = "/usr/share/doc/haze/LICENSE", mode = "644", doc = true },
+    { source = "README.md", dest = "/usr/share/doc/haze/README.md", mode = "644", doc = true },
+]
+auto-req = "no"
+auto-prov = "no"
+
+[package.metadata.generate-rpm.requires]
+systemd = "*"

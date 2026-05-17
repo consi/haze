@@ -1,0 +1,54 @@
+[Unit]
+Description=Haze network latency monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/haze
+Restart=on-failure
+RestartSec=5s
+
+# State + working dir.
+StateDirectory=haze
+WorkingDirectory=/var/lib/haze
+Environment=HAZE_DATA_DIR=/var/lib/haze
+Environment=HAZE_BIND=0.0.0.0:4420
+
+# WebAuthn passkeys require the public origin where users will reach the UI
+# (scheme + host + optional port, no path). Uncomment and set this before
+# registering passkeys — password login works without it. The value must
+# exactly match the URL in the browser address bar; mismatches cause silent
+# registration failures.
+#Environment=HAZE_ORIGIN=https://haze.example.com
+
+EnvironmentFile=-/etc/haze/haze.env
+
+# Runs as a dedicated dynamic user with the minimum capability for ICMP.
+DynamicUser=yes
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+NoNewPrivileges=yes
+
+# Sandboxing.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

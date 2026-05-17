@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <rect width="32" height="32" fill="#ffffff"/>
+  <!-- Pixel-grid "H" — two 8 px verticals + a 4 px crossbar, sized on a 4 px
+       pixel scale so the favicon reads as a chunky Silkscreen-style glyph at
+       16/32/48 px favicon sizes. -->
+  <rect x="2"  y="2"  width="8"  height="28" fill="#000000"/>
+  <rect x="22" y="2"  width="8"  height="28" fill="#000000"/>
+  <rect x="10" y="14" width="12" height="4"  fill="#000000"/>
+</svg>

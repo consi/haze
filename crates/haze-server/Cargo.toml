@@ -1,0 +1,32 @@
+[package]
+name = "haze-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+haze-store = { path = "../haze-store" }
+haze-api = { path = "../haze-api" }
+haze-auth = { path = "../haze-auth" }
+haze-probe = { path = "../haze-probe" }
+haze-alert = { path = "../haze-alert" }
+
+tokio = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["trace", "normalize-path"] }
+url = { workspace = true }
+http = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+rust-embed = { workspace = true }
+mime_guess = { workspace = true }
+rustls = { workspace = true }
+rand = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }

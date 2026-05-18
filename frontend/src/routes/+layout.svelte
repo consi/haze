@@ -10,7 +10,12 @@
     canEditGroups,
     canEditHosts
   } from '$lib/auth.svelte';
-  import { api, type Group, type Host } from '$lib/api';
+  import { api, setUnauthorizedHandler, type Group, type Host } from '$lib/api';
+  import {
+    connectEvents,
+    disconnectEvents,
+    setEventsUnauthorizedHandler
+  } from '$lib/events.svelte';
   import Tree from '$lib/components/Tree.svelte';
   import CreateGroupModal from '$lib/components/CreateGroupModal.svelte';
   import CreateHostModal from '$lib/components/CreateHostModal.svelte';
@@ -20,6 +25,18 @@
   // expandAll is still used by the "++" header button.
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
+
+  // Single redirect path for any code path that detects the session is
+  // gone — both the central api.ts 401 trap and the EventSource terminal
+  // error route through this. Guard against re-entrant calls (already on
+  // /login) so we don't queue infinite navigations.
+  function handleUnauthorized() {
+    disconnectEvents();
+    auth.user = null;
+    if (page.url.pathname !== '/login') void goto('/login');
+  }
+  setUnauthorizedHandler(handleUnauthorized);
+  setEventsUnauthorizedHandler(handleUnauthorized);
 
   let { children } = $props();
 
@@ -74,7 +91,17 @@
     if (auth.user) void loadTree();
   });
 
+  // Open/close the SSE stream as the auth state flips. Both functions are
+  // idempotent, so calling them on every transition is safe. Logging in
+  // from /login sets auth.user → connect; logout / 401 redirect clears it
+  // → disconnect.
+  $effect(() => {
+    if (auth.user) connectEvents();
+    else disconnectEvents();
+  });
+
   async function doLogout() {
+    disconnectEvents();
     await logout();
     void goto('/login');
   }

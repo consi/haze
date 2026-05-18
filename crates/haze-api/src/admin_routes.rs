@@ -10,7 +10,7 @@ use haze_auth::{CurrentUser, Role, hash, user};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{error::ApiError, error::ApiResult, state::AppState};
+use crate::{ChangeKind, error::ApiError, error::ApiResult, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -144,6 +144,7 @@ pub(crate) async fn create_user(
     let row = user::find_by_id_any(&state.pool, id)
         .await?
         .ok_or_else(|| ApiError::Internal("created user vanished".into()))?;
+    state.notify(ChangeKind::Users);
     Ok((StatusCode::CREATED, Json(user_to_resp(row))))
 }
 
@@ -183,6 +184,7 @@ pub(crate) async fn update_user(
         guard_last_admin(&state, id).await?;
     }
     user::set_role(&state.pool, id, new_role).await?;
+    state.notify(ChangeKind::Users);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -216,6 +218,7 @@ pub(crate) async fn reset_password(
     }
     let hashed = hash(&req.new_password)?;
     user::set_password_hash(&state.pool, id, &hashed).await?;
+    state.notify(ChangeKind::Users);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -250,6 +253,7 @@ pub(crate) async fn delete_user(
         guard_last_admin(&state, id).await?;
     }
     user::delete(&state.pool, id).await?;
+    state.notify(ChangeKind::Users);
     Ok(StatusCode::NO_CONTENT)
 }
 

@@ -4,7 +4,21 @@ no-default-features = false
 
 [advisories]
 version = 2
-ignore = []
+ignore = [
+    # paste is archived/unmaintained. Pulled in transitively by utoipa-axum
+    # 0.2; there is no fix available and no in-tree replacement. The crate
+    # is a procedural macro for token pasting, used at build time only —
+    # zero runtime exposure. Revisit when utoipa-axum drops the dep.
+    "RUSTSEC-2024-0436",
+    # hickory-proto BinEncoder O(n²) name compression: CPU exhaustion when
+    # *encoding* large adversarial DNS messages. Haze uses hickory-resolver
+    # as a stub resolver — outgoing queries carry one question and are
+    # constructed from operator-supplied probe config, not attacker input.
+    # The fix ships in hickory-proto 0.26.1, which requires hickory-resolver
+    # 0.26 and a (semver-breaking) API rewrite of the DNS probe. Tracked as
+    # follow-up; ignored here because the attack surface is internal.
+    "RUSTSEC-2026-0119",
+]
 
 [licenses]
 version = 2
@@ -16,10 +30,14 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
     "Zlib",
     "MPL-2.0",
     "CC0-1.0",
+    # webpki-roots ≥0.26 relicensed from MPL-2.0 to CDLA-Permissive-2.0
+    # (Community Data License Agreement). It's a permissive, OSI-non-listed
+    # but FSF-style-free license that explicitly allows redistribution and
+    # derivative works; compatible with our AGPL-3.0 binary.
+    "CDLA-Permissive-2.0",
     "AGPL-3.0-or-later",
 ]
 confidence-threshold = 0.8

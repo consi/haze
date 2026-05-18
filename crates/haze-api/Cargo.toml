@@ -17,6 +17,7 @@ haze-alert = { path = "../haze-alert" }
 
 webauthn-rs = { workspace = true }
 tokio = { workspace = true }
+futures = { workspace = true }
 axum = { workspace = true }
 utoipa = { workspace = true }
 utoipa-axum = { workspace = true }

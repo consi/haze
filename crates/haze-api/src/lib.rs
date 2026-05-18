@@ -12,6 +12,7 @@ mod admin_routes;
 mod alerts_routes;
 mod auth_routes;
 mod error;
+mod events_routes;
 mod groups_routes;
 mod hosts_routes;
 mod middleware;
@@ -21,6 +22,7 @@ mod state;
 mod tree_routes;
 mod user_routes;
 
+pub use events_routes::ChangeKind;
 pub use state::AppState;
 
 pub fn api_router(state: AppState) -> Router {
@@ -74,6 +76,7 @@ pub fn v1_router(state: &AppState) -> Router<AppState> {
         .nest("/settings", settings_routes::router())
         .nest("/admin", admin_routes::router())
         .nest("/alerts", alerts_routes::router())
+        .nest("/events", events_routes::router())
         .layer(axum_mw::from_fn_with_state(
             state.clone(),
             middleware::session_layer,

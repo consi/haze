@@ -11,7 +11,7 @@ use haze_auth::{CurrentUser, api_token, password, user};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{error::ApiError, error::ApiResult, state::AppState};
+use crate::{ChangeKind, error::ApiError, error::ApiResult, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -64,6 +64,7 @@ pub(crate) async fn change_password(
         .bind(auth_user.id)
         .execute(&state.pool)
         .await?;
+    state.notify(ChangeKind::Users);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -123,6 +124,7 @@ pub(crate) async fn delete_passkey(
     if rows == 0 {
         return Err(ApiError::NotFound);
     }
+    state.notify(ChangeKind::Users);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -204,6 +206,7 @@ pub(crate) async fn create_token(
         .await
         .map_err(map_token_err)?;
     let now = chrono::Utc::now().timestamp();
+    state.notify(ChangeKind::Users);
     Ok((
         StatusCode::CREATED,
         Json(CreateTokenResp {
@@ -237,6 +240,7 @@ pub(crate) async fn delete_token(
             haze_auth::TokenError::NotFound => ApiError::NotFound,
             haze_auth::TokenError::Db(e) => ApiError::Db(e),
         })?;
+    state.notify(ChangeKind::Users);
     Ok(StatusCode::NO_CONTENT)
 }
 

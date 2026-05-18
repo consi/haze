@@ -9,7 +9,7 @@ use haze_store::{
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{error::ApiError, error::ApiResult, state::AppState};
+use crate::{ChangeKind, error::ApiError, error::ApiResult, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -77,6 +77,7 @@ pub(crate) async fn update_storage(
     settings::set_retention_tiers(&state.pool, &req.retention_tiers, Some(user.id)).await?;
     settings::set_compactor_interval_secs(&state.pool, req.compactor_interval_secs, Some(user.id))
         .await?;
+    state.notify(ChangeKind::Settings);
     Ok(Json(StorageSettingsResp {
         retention_tiers: req.retention_tiers,
         compactor_interval_secs: req.compactor_interval_secs,
@@ -128,6 +129,7 @@ pub(crate) async fn update_workers(
     }
     validate_pools(&req.pools)?;
     settings::set_worker_pools(&state.pool, &req.pools, Some(user.id)).await?;
+    state.notify(ChangeKind::Settings);
     Ok(Json(WorkerSettingsResp { pools: req.pools }))
 }
 
@@ -216,6 +218,7 @@ pub(crate) async fn update_alerting(
     }
     validate_alerting(&req.settings)?;
     settings::set_alerting_settings(&state.pool, &req.settings, Some(user.id)).await?;
+    state.notify(ChangeKind::Settings);
     Ok(Json(AlertingSettingsResp {
         settings: req.settings,
     }))
@@ -302,6 +305,7 @@ pub(crate) async fn update_host_defaults(
     }
     validate_host_defaults(req.defaults)?;
     settings::set_host_defaults(&state.pool, &req.defaults, Some(user.id)).await?;
+    state.notify(ChangeKind::Settings);
     Ok(Json(HostDefaultsResp {
         defaults: req.defaults,
     }))

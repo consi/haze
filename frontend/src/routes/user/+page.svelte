@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { startRegistration } from '@simplewebauthn/browser';
+  import { goto } from '$app/navigation';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth.svelte';
+  import { reloadKeys, disconnectEvents } from '$lib/events.svelte';
 
   // ─── Account info ────────────────────────────────────────────────────────
 
@@ -11,12 +13,10 @@
   let pwNew = $state('');
   let pwConfirm = $state('');
   let pwBusy = $state(false);
-  let pwMsg = $state<string | null>(null);
   let pwErr = $state<string | null>(null);
 
   async function submitPassword(e: SubmitEvent) {
     e.preventDefault();
-    pwMsg = null;
     pwErr = null;
     if (pwNew !== pwConfirm) {
       pwErr = 'New password and confirmation do not match.';
@@ -29,10 +29,20 @@
     pwBusy = true;
     try {
       await api.changePassword(pwCurrent, pwNew);
-      pwMsg = 'Password updated.';
+      // The backend revokes all sessions on password change (it's the safe
+      // default; see haze_auth::user::set_password_hash). Even though the
+      // /api/v1/user/password route currently keeps the current session
+      // alive, an admin-initiated reset elsewhere would not — and we'd
+      // rather force a single, predictable re-login path than have the
+      // user discover staleness mid-action. Disconnect the SSE stream
+      // ourselves so it doesn't race with the impending /login navigation.
+      disconnectEvents();
+      auth.user = null;
       pwCurrent = '';
       pwNew = '';
       pwConfirm = '';
+      void goto('/login?reason=password-changed');
+      return;
     } catch (e) {
       pwErr = e instanceof Error ? e.message : String(e);
     } finally {
@@ -158,6 +168,19 @@
   onMount(async () => {
     await Promise.all([refreshPasskeys(), refreshTokens()]);
   });
+
+  // Refetch passkeys + tokens whenever the SSE stream signals a user-scoped
+  // change (admin reset our password from another tab, another tab added a
+  // passkey, etc.). Reading the reactive counter inside the effect wires
+  // the dependency automatically.
+  $effect(() => {
+    const _key = reloadKeys.users;
+    void _key;
+    if (auth.user) {
+      void refreshPasskeys();
+      void refreshTokens();
+    }
+  });
 </script>
 
 <div class="p-6 max-w-3xl space-y-4">
@@ -212,7 +235,6 @@
           style="background: var(--bg); border-color: var(--border); color: var(--fg)"
         />
       </label>
-      {#if pwMsg}<p style="color: var(--latency-good)">{pwMsg}</p>{/if}
       {#if pwErr}<p style="color: var(--latency-bad)">{pwErr}</p>{/if}
       <button
         type="submit"

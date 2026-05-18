@@ -10,6 +10,7 @@
     type Webhook,
     ApiError
   } from '$lib/api';
+  import { reloadKeys } from '$lib/events.svelte';
   import AlertRuleModal from '$lib/components/AlertRuleModal.svelte';
   import Forbidden from '$lib/components/Forbidden.svelte';
   import { onMount, onDestroy } from 'svelte';
@@ -83,6 +84,18 @@
 
   onDestroy(() => {
     if (pollTimer) clearInterval(pollTimer);
+  });
+
+  // SSE-driven refresh. Rules and webhook names come from full `refresh()`;
+  // tree changes (groups/hosts) only affect label rendering for the rule
+  // target column, so the same path is fine. Alert *states* keep their
+  // 5 s poll — those flip on backend evaluation cycles, not on a user
+  // mutation, and the SSE channel doesn't carry state-transition events.
+  $effect(() => {
+    void reloadKeys.alerts;
+    void reloadKeys.webhooks;
+    void reloadKeys.tree;
+    if (canSeeAlerts()) void refresh();
   });
 
   function breadcrumb(g: Group): string {

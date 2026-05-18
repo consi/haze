@@ -236,6 +236,16 @@ pub async fn run(cfg: Config) -> Result<()> {
         None
     };
 
+    // 64 slots is enough headroom for bursty mutations (multi-host imports,
+    // alert state churn) without keeping much memory around — receivers
+    // that lag past 64 events get a single "refetch all" notice and
+    // continue. The actual values are tiny (`ChangeKind` is a copy enum).
+    let (events_tx, _) = tokio::sync::broadcast::channel(64);
+    // Shared shutdown notify: woken by `shutdown_signal()` before it
+    // returns so the SSE handlers in haze-api can exit their `recv().await`
+    // and let axum's graceful shutdown drain. Without this, an open
+    // browser EventSource pins the server alive until the kill timeout.
+    let shutdown = Arc::new(tokio::sync::Notify::new());
     let app = build_app(haze_api::AppState {
         pool,
         hzc,
@@ -243,6 +253,8 @@ pub async fn run(cfg: Config) -> Result<()> {
         scheduler: scheduler_handle,
         passkeys,
         series,
+        events: events_tx,
+        shutdown: shutdown.clone(),
     });
 
     let addr: SocketAddr = cfg.bind.parse().context("invalid --bind address")?;
@@ -252,7 +264,7 @@ pub async fn run(cfg: Config) -> Result<()> {
     tracing::info!(%addr, "listening");
 
     axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown_signal(shutdown))
         .await
         .context("axum serve failed")
 }
@@ -299,9 +311,39 @@ async fn max_rule_window_secs(pool: &sqlx::SqlitePool) -> i64 {
     }
 }
 
-async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
-    tracing::info!("shutdown signal received");
+async fn shutdown_signal(shutdown: Arc<tokio::sync::Notify>) {
+    use tokio::signal::unix::{SignalKind, signal};
+
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    let term = async {
+        match signal(SignalKind::terminate()) {
+            Ok(mut s) => {
+                s.recv().await;
+            }
+            Err(e) => {
+                // If the SIGTERM handler can't be installed (e.g. the process
+                // somehow lacks the capability), fall back to ctrl_c-only by
+                // pending forever on this arm of the select.
+                tracing::warn!(error = ?e, "failed to install SIGTERM handler");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+    // PID 1 in distroless: Docker/Kubernetes deliver SIGTERM on `stop` and
+    // graceful shutdown — without this arm haze would ignore it and get
+    // hard-killed at the grace timeout. If we ever spawn child processes,
+    // PID 1 will also need a SIGCHLD reaper (or `tini` in the Dockerfile).
+    tokio::select! {
+        () = ctrl_c => tracing::info!("shutdown: SIGINT"),
+        () = term => tracing::info!("shutdown: SIGTERM"),
+    }
+    // Wake every long-lived response handler (SSE) before axum starts its
+    // drain. Without this, an idle browser tab's `/events` connection
+    // holds the response stream open forever and axum::serve never
+    // returns — Ctrl-C "stalls" for the user.
+    shutdown.notify_waiters();
 }
 
 /// First-boot admin provisioning. If the users table is empty, create an

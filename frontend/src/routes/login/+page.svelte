@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { startAuthentication } from '@simplewebauthn/browser';
   import { login as pwLogin, auth } from '$lib/auth.svelte';
   import { api } from '$lib/api';
@@ -10,6 +11,15 @@
   let err = $state<string | null>(null);
   let submitting = $state(false);
   let passkeysEnabled = $state(false);
+
+  // Banner shown when we arrived here from a forced redirect: password
+  // change ("you'll need to sign back in") or session loss elsewhere.
+  const notice = $derived.by(() => {
+    const reason = page.url.searchParams.get('reason');
+    if (reason === 'password-changed')
+      return 'Password updated. Please sign in again.';
+    return null;
+  });
 
   onMount(async () => {
     try {
@@ -60,6 +70,10 @@
     style="border-color: var(--border); background: rgba(255,255,255,0.02)"
   >
     <h1 class="font-semibold text-sm" style="color: var(--fg)">Sign in</h1>
+
+    {#if notice}
+      <p class="text-xs" style="color: var(--muted)">{notice}</p>
+    {/if}
 
     <label class="block">
       <span class="text-xs" style="color: var(--muted)">Username</span>

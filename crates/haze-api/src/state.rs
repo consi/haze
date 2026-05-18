@@ -6,6 +6,9 @@ use haze_auth::PasskeyService;
 use haze_probe::scheduler::SchedulerHandle;
 use haze_store::{HzcStore, SeriesStore};
 use sqlx::SqlitePool;
+use tokio::sync::{Notify, broadcast};
+
+use crate::events_routes::ChangeKind;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -20,4 +23,24 @@ pub struct AppState {
     /// probe scheduler, read by the alert evaluator and the test-webhook
     /// route. Shared via Arc so handlers can hand a clone out cheaply.
     pub series: Arc<SeriesStore>,
+    /// Broadcast channel for domain-change notifications. Mutation routes
+    /// `send` a `ChangeKind` after a successful write; the SSE endpoint at
+    /// `/api/v1/events` subscribes a receiver per connection and forwards
+    /// events to the browser so open tabs refresh without polling.
+    pub events: broadcast::Sender<ChangeKind>,
+    /// Wake-up for long-lived response handlers (currently just the SSE
+    /// stream) to bail out at shutdown. Without this, axum's graceful
+    /// shutdown blocks forever waiting for the held-open `/events`
+    /// response to drain — `broadcast::Receiver::recv().await` never
+    /// resolves on its own, so we'd sit until SIGKILL.
+    pub shutdown: Arc<Notify>,
+}
+
+impl AppState {
+    /// Send a change notification on a best-effort basis. Ignores the case
+    /// where there are no subscribers — that's normal when no browser tab
+    /// happens to be open. Call this *after* the mutating SQL has committed.
+    pub fn notify(&self, kind: ChangeKind) {
+        let _ = self.events.send(kind);
+    }
 }

@@ -13,7 +13,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{error::ApiError, error::ApiResult, state::AppState};
+use crate::{ChangeKind, error::ApiError, error::ApiResult, state::AppState};
 
 /// Maximum depth a group is allowed to live at (0 = root). Capped to keep
 /// breadcrumbs readable and the materialized path columns bounded.
@@ -164,6 +164,7 @@ pub(crate) async fn create(
         ?parent_uuid,
         "group created"
     );
+    state.notify(ChangeKind::Tree);
     Ok((
         StatusCode::CREATED,
         Json(GroupResp {
@@ -271,6 +272,7 @@ pub(crate) async fn update(
             Err(groups::MoveError::Group(e)) => return Err(e.into()),
         }
     }
+    state.notify(ChangeKind::Tree);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -314,5 +316,6 @@ pub(crate) async fn delete(
         display_name = %target.display_name,
         "group deleted"
     );
+    state.notify(ChangeKind::Tree);
     Ok(StatusCode::NO_CONTENT)
 }

@@ -27,6 +27,8 @@
   let groupSearch = $state('');
   let groupPickerOpen = $state(false);
   let groupInputEl: HTMLInputElement | undefined = $state();
+  let groupListEl: HTMLDivElement | undefined = $state();
+  let groupHighlighted = $state(0);
   let displayName = $state('');
   let kind = $state<ProbeKind>('ping');
   // Initialised from /settings/hosts once the modal mounts, so admins
@@ -178,16 +180,51 @@
       .slice(0, 50);
   });
 
+  // Reset the keyboard highlight whenever the filtered set changes shape so
+  // we never point past the end of the list. Reading `.length` is the cheap
+  // dependency we need.
+  $effect(() => {
+    void groupMatches.length;
+    groupHighlighted = 0;
+  });
+
+  // Keep the highlighted row visible when the user arrows past the dropdown's
+  // 12 rem max-height. `block: 'nearest'` only scrolls when the row is
+  // actually off-screen, so mouse-hover-driven highlights don't jiggle the
+  // viewport.
+  $effect(() => {
+    if (!groupPickerOpen) return;
+    const i = groupHighlighted;
+    queueMicrotask(() => {
+      const el = groupListEl?.children[i] as HTMLElement | undefined;
+      el?.scrollIntoView({ block: 'nearest' });
+    });
+  });
+
   function onGroupInputKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && groupPickerOpen) {
+      // Close the picker first; stop the event so the Modal's window-level
+      // Esc handler doesn't also dismiss the modal.
+      groupPickerOpen = false;
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
     // Backspace on an empty search input pops the last selected chip - a
     // pattern users know from chip inputs in Gmail / Slack / etc.
     if (e.key === 'Backspace' && groupSearch === '' && groupUuids.length > 0) {
       groupUuids = groupUuids.slice(0, -1);
+    } else if (e.key === 'ArrowDown' && groupMatches.length > 0) {
+      e.preventDefault();
+      groupHighlighted = (groupHighlighted + 1) % groupMatches.length;
+    } else if (e.key === 'ArrowUp' && groupMatches.length > 0) {
+      e.preventDefault();
+      groupHighlighted =
+        (groupHighlighted - 1 + groupMatches.length) % groupMatches.length;
     } else if (e.key === 'Enter' && groupMatches.length > 0) {
       e.preventDefault();
-      addGroup(groupMatches[0].uuid);
-    } else if (e.key === 'Escape') {
-      groupPickerOpen = false;
+      const idx = Math.min(groupHighlighted, groupMatches.length - 1);
+      addGroup(groupMatches[idx].uuid);
     }
   }
 
@@ -361,18 +398,23 @@
 
         {#if groupPickerOpen && groupMatches.length > 0}
           <div
+            bind:this={groupListEl}
             class="absolute left-0 right-0 top-full mt-0.5 z-10 max-h-48 overflow-y-auto rounded border shadow-md"
             style="background: var(--bg); border-color: var(--border)"
             role="listbox"
           >
-            {#each groupMatches as g (g.uuid)}
+            {#each groupMatches as g, i (g.uuid)}
               <button
                 type="button"
                 onmousedown={(e) => e.preventDefault()}
+                onmouseenter={() => (groupHighlighted = i)}
                 onclick={() => addGroup(g.uuid)}
-                class="w-full text-left px-2 py-1 hover:bg-white/5"
+                class="w-full text-left px-2 py-1"
+                style:background={i === groupHighlighted
+                  ? 'rgba(128, 128, 128, 0.25)'
+                  : 'transparent'}
                 role="option"
-                aria-selected="false"
+                aria-selected={i === groupHighlighted}
               >
                 {breadcrumb(g)}
               </button>

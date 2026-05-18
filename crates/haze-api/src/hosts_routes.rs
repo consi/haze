@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{error::ApiError, error::ApiResult, state::AppState};
+use crate::{ChangeKind, error::ApiError, error::ApiResult, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -194,6 +194,7 @@ pub(crate) async fn create(
         samples_per_period: req.samples_per_period,
         chunk_window_secs: req.chunk_window_secs,
     });
+    state.notify(ChangeKind::Tree);
     Ok((StatusCode::CREATED, Json(HostResp::from(h))))
 }
 
@@ -312,6 +313,7 @@ pub(crate) async fn update(
         group_count = host.group_uuids.len(),
         "host updated"
     );
+    state.notify(ChangeKind::Tree);
     Ok(Json(HostResp::from(host)))
 }
 
@@ -345,6 +347,7 @@ pub(crate) async fn delete(
     );
     state.scheduler.remove(host_uuid);
     let _ = state.hzc.delete(host_uuid);
+    state.notify(ChangeKind::Tree);
     Ok(StatusCode::NO_CONTENT)
 }
 

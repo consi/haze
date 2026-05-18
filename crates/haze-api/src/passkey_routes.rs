@@ -13,7 +13,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 use webauthn_rs::prelude::{PublicKeyCredential, RegisterPublicKeyCredential};
 
-use crate::{error::ApiError, error::ApiResult, state::AppState};
+use crate::{ChangeKind, error::ApiError, error::ApiResult, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -100,6 +100,7 @@ pub(crate) async fn register_finish(
     svc.finish_register(&state.pool, req.token, req.credential, req.label.as_deref())
         .await
         .map_err(map_pkerr)?;
+    state.notify(ChangeKind::Users);
     Ok(StatusCode::NO_CONTENT)
 }
 

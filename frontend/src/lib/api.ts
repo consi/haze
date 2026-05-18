@@ -201,6 +201,21 @@ export interface SeriesResp {
   samples: SeriesPoint[];
 }
 
+// Global handler invoked when an API call returns 401 outside the
+// expected auth-probe paths. The layout registers this to redirect to
+// /login so a session revoked in the background (logout in another tab,
+// admin-initiated password reset) doesn't leave the user stranded on an
+// authenticated page that silently fails every action.
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(h: () => void) {
+  onUnauthorized = h;
+}
+
+// Paths where a 401 is a normal outcome and must NOT trigger the global
+// redirect — otherwise we'd loop on the login page or stomp the initial
+// "are you signed in?" probe.
+const UNAUTH_OK_PREFIXES = ['/auth/login', '/auth/me', '/auth/passkey/login'];
+
 async function req<T>(
   method: string,
   path: string,
@@ -223,6 +238,13 @@ async function req<T>(
       if (j.detail) detail = j.detail;
     } catch {
       // ignore
+    }
+    if (
+      res.status === 401 &&
+      onUnauthorized &&
+      !UNAUTH_OK_PREFIXES.some((p) => path.startsWith(p))
+    ) {
+      onUnauthorized();
     }
     throw new ApiError(res.status, detail);
   }

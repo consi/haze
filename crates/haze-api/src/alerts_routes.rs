@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{error::ApiError, error::ApiResult, state::AppState};
+use crate::{ChangeKind, error::ApiError, error::ApiResult, state::AppState};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -304,6 +304,7 @@ pub(crate) async fn create_rule(
         name = %rule.name,
         "alert rule created"
     );
+    state.notify(ChangeKind::Alerts);
     Ok((StatusCode::CREATED, Json(AlertRuleResp::from(rule))))
 }
 
@@ -360,6 +361,7 @@ pub(crate) async fn update_rule(
         name = %rule.name,
         "alert rule updated"
     );
+    state.notify(ChangeKind::Alerts);
     Ok(Json(AlertRuleResp::from(rule)))
 }
 
@@ -384,6 +386,7 @@ pub(crate) async fn delete_rule(
         .await
         .map_err(map_repo_err)?;
     tracing::info!(rule_uuid = %uuid, actor = %user.username, "alert rule deleted");
+    state.notify(ChangeKind::Alerts);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -602,6 +605,7 @@ pub(crate) async fn create_webhook(
         .await
         .map_err(map_repo_err)?;
     tracing::info!(webhook_uuid = %w.uuid, actor = %user.username, "webhook created");
+    state.notify(ChangeKind::Webhooks);
     Ok((StatusCode::CREATED, Json(WebhookResp::from(w))))
 }
 
@@ -631,6 +635,7 @@ pub(crate) async fn update_webhook(
         .await
         .map_err(map_repo_err)?;
     tracing::info!(webhook_uuid = %w.uuid, actor = %user.username, "webhook updated");
+    state.notify(ChangeKind::Webhooks);
     Ok(Json(WebhookResp::from(w)))
 }
 
@@ -675,6 +680,7 @@ pub(crate) async fn delete_webhook(
         .await
         .map_err(map_repo_err)?;
     tracing::info!(webhook_uuid = %uuid, actor = %user.username, "webhook deleted");
+    state.notify(ChangeKind::Webhooks);
     Ok(StatusCode::NO_CONTENT)
 }
 

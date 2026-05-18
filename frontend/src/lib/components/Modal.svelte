@@ -20,10 +20,22 @@
     return () => window.removeEventListener('keydown', onKey);
   });
 
+  // Track where the press started. A drag whose mousedown lands inside the
+  // dialog (e.g. selecting text inside a number input) but whose mouseup
+  // happens on the backdrop fires a `click` on the common ancestor — the
+  // backdrop — with `e.target === e.currentTarget`. Without remembering the
+  // press origin we'd close the modal on every such drag. We close only
+  // when *both* ends of the click are on the backdrop itself.
+  let pressTarget: EventTarget | null = null;
+
+  function onBackdropMouseDown(e: MouseEvent) {
+    pressTarget = e.target;
+  }
+
   function onBackdrop(e: MouseEvent) {
-    // Only close when the click landed on the backdrop itself, not bubbled
-    // up from inside the dialog.
-    if (e.target === e.currentTarget) onClose();
+    const both = e.target === e.currentTarget && pressTarget === e.currentTarget;
+    pressTarget = null;
+    if (both) onClose();
   }
 </script>
 
@@ -36,6 +48,7 @@
 <div
   class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto"
   style="background: rgba(0,0,0,0.45); padding: 4rem 1rem"
+  onmousedown={onBackdropMouseDown}
   onclick={onBackdrop}
 >
   <div

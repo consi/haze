@@ -95,6 +95,8 @@
   let targetSearch = $state('');
   let targetPickerOpen = $state(false);
   let targetInputEl: HTMLInputElement | undefined = $state();
+  let targetListEl: HTMLDivElement | undefined = $state();
+  let targetHighlighted = $state(0);
 
   let busy = $state(false);
   let err = $state<string | null>(null);
@@ -225,14 +227,39 @@
     targets = targets.filter((_, i) => i !== index);
   }
 
+  $effect(() => {
+    void targetSuggestions.length;
+    targetHighlighted = 0;
+  });
+  $effect(() => {
+    if (!targetPickerOpen) return;
+    const i = targetHighlighted;
+    queueMicrotask(() => {
+      const el = targetListEl?.children[i] as HTMLElement | undefined;
+      el?.scrollIntoView({ block: 'nearest' });
+    });
+  });
+
   function onTargetInputKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && targetPickerOpen) {
+      targetPickerOpen = false;
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
     if (e.key === 'Backspace' && targetSearch === '' && targets.length > 0) {
       targets = targets.slice(0, -1);
+    } else if (e.key === 'ArrowDown' && targetSuggestions.length > 0) {
+      e.preventDefault();
+      targetHighlighted = (targetHighlighted + 1) % targetSuggestions.length;
+    } else if (e.key === 'ArrowUp' && targetSuggestions.length > 0) {
+      e.preventDefault();
+      targetHighlighted =
+        (targetHighlighted - 1 + targetSuggestions.length) % targetSuggestions.length;
     } else if (e.key === 'Enter' && targetSuggestions.length > 0) {
       e.preventDefault();
-      addTarget(targetSuggestions[0]);
-    } else if (e.key === 'Escape') {
-      targetPickerOpen = false;
+      const idx = Math.min(targetHighlighted, targetSuggestions.length - 1);
+      addTarget(targetSuggestions[idx]);
     }
   }
 
@@ -381,18 +408,23 @@
         </div>
         {#if targetPickerOpen && targetSuggestions.length > 0}
           <div
+            bind:this={targetListEl}
             class="absolute left-0 right-0 top-full mt-0.5 z-10 max-h-60 overflow-y-auto rounded border shadow-md"
             style="background: var(--bg); border-color: var(--border)"
             role="listbox"
           >
-            {#each targetSuggestions as s (`${s.kind}:${s.uuid}`)}
+            {#each targetSuggestions as s, i (`${s.kind}:${s.uuid}`)}
               <button
                 type="button"
                 onmousedown={(e) => e.preventDefault()}
+                onmouseenter={() => (targetHighlighted = i)}
                 onclick={() => addTarget(s)}
-                class="w-full text-left px-2 py-0.5 hover:bg-white/5 mono flex items-center gap-2 leading-tight"
+                class="w-full text-left px-2 py-0.5 mono flex items-center gap-2 leading-tight"
+                style:background={i === targetHighlighted
+                  ? 'rgba(128, 128, 128, 0.25)'
+                  : 'transparent'}
                 role="option"
-                aria-selected="false"
+                aria-selected={i === targetHighlighted}
               >
                 <span
                   class="inline-block w-4 text-center text-[10px] uppercase shrink-0"

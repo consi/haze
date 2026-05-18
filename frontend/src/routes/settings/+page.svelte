@@ -15,6 +15,7 @@
     type WorkerPools,
     type WorkerSettings
   } from '$lib/api';
+  import { reloadKeys } from '$lib/events.svelte';
   import { onMount } from 'svelte';
 
   // ─── Storage ──────────────────────────────────────────────────────────────
@@ -718,6 +719,23 @@
       alertingLoading = false;
       hostDefaultsLoading = false;
     }
+  });
+
+  // SSE-driven refresh per domain. Reading the counter inside the effect
+  // wires the reactivity; the editor's local "currently being typed" state
+  // sits in separate fields (`tiers`, `pools`, etc.) so a refresh while
+  // the user is mid-edit only re-pulls the server's view — it doesn't
+  // stomp uncommitted edits. We deliberately only refetch users and
+  // webhooks here; the settings sub-sections (storage/workers/alerting/
+  // host defaults) are write-only forms — a remote save by another admin
+  // is rare enough that requiring a manual reload there is acceptable.
+  $effect(() => {
+    void reloadKeys.users;
+    if (canSeeSettings()) void refreshUsers();
+  });
+  $effect(() => {
+    void reloadKeys.webhooks;
+    if (canSeeSettings()) void refreshWebhooks();
   });
 </script>
 

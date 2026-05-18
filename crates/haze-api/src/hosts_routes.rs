@@ -20,7 +20,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{ChangeKind, error::ApiError, error::ApiResult, state::AppState};
+use crate::{
+    ChangeKind, error::ApiError, error::ApiResult, middleware::ViewerAccess, state::AppState,
+};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -56,7 +58,7 @@ pub(crate) struct ListQuery {
     tag = "hosts"
 )]
 pub(crate) async fn list(
-    _user: CurrentUser,
+    _viewer: ViewerAccess,
     State(state): State<AppState>,
     Query(q): Query<ListQuery>,
 ) -> ApiResult<Json<Vec<HostResp>>> {
@@ -84,7 +86,7 @@ pub(crate) async fn list(
     tag = "hosts"
 )]
 pub(crate) async fn get_one(
-    _user: CurrentUser,
+    _viewer: ViewerAccess,
     State(state): State<AppState>,
     Path(uuid): Path<Uuid>,
 ) -> ApiResult<Json<HostResp>> {
@@ -430,7 +432,7 @@ pub(crate) struct SeriesResp {
     tag = "hosts"
 )]
 pub(crate) async fn series(
-    _user: CurrentUser,
+    _viewer: ViewerAccess,
     State(state): State<AppState>,
     Path(uuid): Path<Uuid>,
     Query(q): Query<SeriesQuery>,

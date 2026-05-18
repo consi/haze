@@ -3,13 +3,16 @@
 use axum::{Json, Router, extract::State, routing::get};
 use haze_auth::CurrentUser;
 use haze_store::{
-    AlertingSettings, HostDefaults, RetentionTier,
+    AlertingSettings, HostDefaults, PublicModeSettings, RetentionTier,
     repo::settings::{self, WorkerPools},
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{ChangeKind, error::ApiError, error::ApiResult, state::AppState};
+use crate::{
+    ChangeKind, error::ApiError, error::ApiResult, middleware::ViewerAccess,
+    rate_limit::build_limiters, state::AppState,
+};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -17,6 +20,7 @@ pub fn router() -> Router<AppState> {
         .route("/workers", get(get_workers).put(update_workers))
         .route("/alerting", get(get_alerting).put(update_alerting))
         .route("/hosts", get(get_host_defaults).put(update_host_defaults))
+        .route("/public", get(get_public_mode).put(update_public_mode))
 }
 
 #[derive(Serialize, ToSchema)]
@@ -43,7 +47,11 @@ pub(crate) struct UpdateStorageSettingsReq {
     tag = "settings"
 )]
 pub(crate) async fn get_storage(
-    _user: CurrentUser,
+    // ViewerAccess so anonymous public-mode visitors can read the retention
+    // tiers — the host and group detail pages use them to compute the
+    // "max" preset's lower bound on smoke charts. The data is policy, not
+    // sample content, so it's safe to expose to viewers.
+    _viewer: ViewerAccess,
     State(state): State<AppState>,
 ) -> ApiResult<Json<StorageSettingsResp>> {
     let retention_tiers = settings::retention_tiers(&state.pool).await?;
@@ -320,6 +328,94 @@ fn validate_host_defaults(d: HostDefaults) -> ApiResult<()> {
     if !(1..=1_000).contains(&d.samples_per_period) {
         return Err(ApiError::Validation(
             "samples_per_period must be between 1 and 1000".into(),
+        ));
+    }
+    Ok(())
+}
+
+// ─── Public mode + anonymous rate limits ──────────────────────────────────
+
+#[derive(Serialize, ToSchema)]
+pub(crate) struct PublicModeSettingsResp {
+    pub settings: PublicModeSettings,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub(crate) struct UpdatePublicModeSettingsReq {
+    pub settings: PublicModeSettings,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/settings/public",
+    responses((status = 200, body = PublicModeSettingsResp)),
+    tag = "settings"
+)]
+pub(crate) async fn get_public_mode(
+    _user: CurrentUser,
+    State(state): State<AppState>,
+) -> ApiResult<Json<PublicModeSettingsResp>> {
+    let settings = settings::public_mode_settings(&state.pool).await?;
+    Ok(Json(PublicModeSettingsResp { settings }))
+}
+
+#[utoipa::path(
+    put,
+    path = "/api/v1/settings/public",
+    request_body = UpdatePublicModeSettingsReq,
+    responses(
+        (status = 200, body = PublicModeSettingsResp),
+        (status = 403, description = "Forbidden - admin role required"),
+        (status = 422, description = "Validation error")
+    ),
+    tag = "settings"
+)]
+pub(crate) async fn update_public_mode(
+    user: CurrentUser,
+    State(state): State<AppState>,
+    Json(req): Json<UpdatePublicModeSettingsReq>,
+) -> ApiResult<Json<PublicModeSettingsResp>> {
+    if !user.role.is_admin() {
+        return Err(ApiError::Forbidden);
+    }
+    validate_public_mode(&req.settings)?;
+    settings::set_public_mode_settings(&state.pool, &req.settings, Some(user.id)).await?;
+    // Hot-swap the running limiters so the new caps apply immediately
+    // without a server restart. Subsequent anonymous requests see the
+    // fresh buckets on the next `state.limiters.load()`.
+    state
+        .limiters
+        .store(std::sync::Arc::new(build_limiters(&req.settings)));
+    state.notify(ChangeKind::Settings);
+    Ok(Json(PublicModeSettingsResp {
+        settings: req.settings,
+    }))
+}
+
+fn validate_public_mode(s: &PublicModeSettings) -> ApiResult<()> {
+    if !(1..=100_000).contains(&s.light_per_minute) {
+        return Err(ApiError::Validation(
+            "light_per_minute must be between 1 and 100000".into(),
+        ));
+    }
+    if !(1..=s.light_per_minute).contains(&s.light_burst) {
+        return Err(ApiError::Validation(
+            "light_burst must be between 1 and light_per_minute".into(),
+        ));
+    }
+    if !(1..=1_000_000).contains(&s.series_per_minute) {
+        return Err(ApiError::Validation(
+            "series_per_minute must be between 1 and 1000000".into(),
+        ));
+    }
+    if !(1..=s.series_per_minute).contains(&s.series_burst) {
+        return Err(ApiError::Validation(
+            "series_burst must be between 1 and series_per_minute".into(),
+        ));
+    }
+    if !(1..=64).contains(&s.sse_max_per_ip) {
+        return Err(ApiError::Validation(
+            "sse_max_per_ip must be between 1 and 64".into(),
         ));
     }
     Ok(())

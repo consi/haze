@@ -267,65 +267,89 @@
   });
 </script>
 
-<div class="p-4">
+<div class="p-2 md:p-4">
   {#if err}
     <p class="text-xs mb-2" style="color: var(--latency-bad)">{err}</p>
   {/if}
 
   {#if host}
-    <header class="mb-3">
-      <h1 class="text-sm font-semibold">{host.display_name}</h1>
-      <div class="text-xs flex items-center gap-2 mt-0.5" style="color: var(--muted)">
-        <span class="px-1 rounded" style="background: var(--border); color: var(--fg)">
-          {host.probe_type}
-        </span>
-        <span>·</span>
-        <span>every {host.interval_secs}s × {host.samples_per_period} samples</span>
-      </div>
-    </header>
+    <!-- Sticky compact header. Row 1: title + meta. Row 2: presets +
+         refresh + LIVE. Row 3 (mobile only): time-range pill below the
+         preset row so it doesn't fight the LIVE pill for space. The
+         whole block stays at the top of the scroll area so controls are
+         always at the user's fingertip while scrolling charts. -->
+    <div
+      class="sticky top-0 z-20 -mx-2 md:-mx-4 px-2 md:px-4 pt-2 md:pt-0 pb-2 border-b md:border-none"
+      style="background: var(--bg); border-color: var(--border)"
+    >
+      <header class="mb-2">
+        <h1 class="text-sm font-semibold truncate">{host.display_name}</h1>
+        <div class="text-xs flex items-center gap-2 mt-0.5 flex-wrap" style="color: var(--muted)">
+          <span class="px-1 rounded" style="background: var(--border); color: var(--fg)">
+            {host.probe_type}
+          </span>
+          <span>·</span>
+          <span>every {host.interval_secs}s × {host.samples_per_period} samples</span>
+        </div>
+      </header>
 
-    <div class="flex items-center gap-1 mb-2">
-      {#each PRESETS as p}
+      <div class="flex items-center gap-1 overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
+        {#each PRESETS as p}
+          <button
+            type="button"
+            onclick={() => selectPreset(p)}
+            class="px-2 py-0.5 rounded text-xs shrink-0"
+            style="background: {preset === p ? 'var(--accent)' : 'var(--border)'}; color: {preset === p ? '#0b0d10' : 'var(--fg)'}"
+          >
+            {p.label}
+          </button>
+        {/each}
         <button
           type="button"
-          onclick={() => selectPreset(p)}
-          class="px-2 py-0.5 rounded text-xs"
-          style="background: {preset === p ? 'var(--accent)' : 'var(--border)'}; color: {preset === p ? '#0b0d10' : 'var(--fg)'}"
+          onclick={refreshNow}
+          class="ml-2 px-2 py-0.5 rounded text-xs shrink-0"
+          style="background: var(--border); color: var(--fg)"
+          title="Refresh now"
         >
-          {p.label}
+          ↻
         </button>
-      {/each}
-      <button
-        type="button"
-        onclick={refreshNow}
-        class="ml-2 px-2 py-0.5 rounded text-xs"
-        style="background: var(--border); color: var(--fg)"
-        title="Refresh now"
-      >
-        ↻
-      </button>
-      <button
-        type="button"
-        onclick={toggleLive}
-        class="px-2 py-0.5 rounded text-xs flex items-center gap-1"
-        style="background: {live ? 'var(--latency-good)' : 'var(--border)'}; color: {live ? '#0b0d10' : 'var(--fg)'}"
-        title={live ? 'Pause live follow' : 'Resume live follow'}
-      >
-        <span
-          class="inline-block rounded-full"
-          style="width: 6px; height: 6px; background: {live ? '#0b0d10' : 'var(--muted)'}; {live ? 'animation: haze-pulse 1.2s ease-in-out infinite' : ''}"
-        ></span>
-        {live ? 'LIVE' : 'PAUSED'}
-      </button>
-      <span class="ml-auto text-xs mono" style="color: var(--muted)">
+        <button
+          type="button"
+          onclick={toggleLive}
+          class="px-2 py-0.5 rounded text-xs flex items-center gap-1 shrink-0"
+          style="background: {live ? 'var(--latency-good)' : 'var(--border)'}; color: {live ? '#0b0d10' : 'var(--fg)'}"
+          title={live ? 'Pause live follow' : 'Resume live follow'}
+        >
+          <span
+            class="inline-block rounded-full"
+            style="width: 6px; height: 6px; background: {live ? '#0b0d10' : 'var(--muted)'}; {live ? 'animation: haze-pulse 1.2s ease-in-out infinite' : ''}"
+          ></span>
+          {live ? 'LIVE' : 'PAUSED'}
+        </button>
+        <!-- Time-range display: inline on the right on desktop; on mobile
+             it would be cramped next to the LIVE pill so we drop it onto
+             the next line (see below) and hide this copy. -->
+        <span class="hidden md:inline ml-auto text-xs mono shrink-0" style="color: var(--muted)">
+          {formatRange(fromSecs, toSecs)}
+          {#if loading}
+            <span class="ml-2 text-[10px]">loading…</span>
+          {/if}
+        </span>
+      </div>
+      <!-- Mobile-only row 3: time-range pill under the preset strip. -->
+      <div class="md:hidden mt-1 text-[11px] mono" style="color: var(--muted)">
         {formatRange(fromSecs, toSecs)}
         {#if loading}
           <span class="ml-2 text-[10px]">loading…</span>
         {/if}
-      </span>
+      </div>
     </div>
 
-    <div bind:this={chartWrapper} class="border rounded p-2" style="border-color: var(--border)">
+    <div
+      bind:this={chartWrapper}
+      class="border rounded p-1 md:p-2 mt-2"
+      style="border-color: var(--border)"
+    >
       {#if series}
         <!-- Pin the chart's x-axis to the requested window so zoom-out past
              the available data still draws the full window with empty space

@@ -2,6 +2,7 @@
 // and `npm run gen-api` becomes useful (lands in phase 5).
 
 import { base } from '$app/paths';
+import { clearThrottled, noteThrottled } from './rate-limit.svelte';
 
 export type Role = 'admin' | 'user' | 'reader' | 'disabled';
 
@@ -190,6 +191,25 @@ export interface HostDefaults {
   samples_per_period: number;
 }
 
+/** Public-mode toggle + anonymous-traffic rate limits. Read by every
+ *  client (the `enabled` flag is also surfaced via `/server-info` so the
+ *  layout can branch before login); written by admin from /settings. */
+export interface PublicModeSettings {
+  enabled: boolean;
+  light_per_minute: number;
+  light_burst: number;
+  series_per_minute: number;
+  series_burst: number;
+  sse_max_per_ip: number;
+}
+
+export interface ServerInfo {
+  passkeys_enabled: boolean;
+  /** Whether anonymous browsing is enabled on this instance. */
+  public_mode_enabled: boolean;
+  version: string;
+}
+
 export interface WebhookTestResult {
   status: number | null;
   detail: string;
@@ -218,21 +238,52 @@ export function setUnauthorizedHandler(h: () => void) {
 // "are you signed in?" probe.
 const UNAUTH_OK_PREFIXES = ['/auth/login', '/auth/me', '/auth/passkey/login'];
 
-async function req<T>(
-  method: string,
-  path: string,
-  body?: unknown,
-  init?: RequestInit
-): Promise<T> {
-  const headers: Record<string, string> = init?.headers as Record<string, string> ?? {};
+// Anonymous traffic can trip the public-mode rate limiter. When it does,
+// the server returns 429 with a `Retry-After` header. We honour it up to
+// this cap, sleep, and retry the request once. The reactive
+// `rateLimitState` surfaces the wait so the UI can show a banner.
+const RETRY_AFTER_MAX_SECS = 30;
+const RETRY_AFTER_FALLBACK_SECS = 2;
+
+function parseRetryAfter(raw: string | null): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return RETRY_AFTER_FALLBACK_SECS;
+  return Math.min(n, RETRY_AFTER_MAX_SECS);
+}
+
+async function doFetch(method: string, path: string, body?: unknown, init?: RequestInit) {
+  const headers: Record<string, string> = (init?.headers as Record<string, string>) ?? {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const res = await fetch(`${base}/api/v1${path}`, {
+  return fetch(`${base}/api/v1${path}`, {
     method,
     credentials: 'same-origin',
     body: body !== undefined ? JSON.stringify(body) : undefined,
     ...init,
     headers
   });
+}
+
+async function req<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  init?: RequestInit
+): Promise<T> {
+  let res = await doFetch(method, path, body, init);
+
+  if (res.status === 429) {
+    const waitSecs = parseRetryAfter(res.headers.get('Retry-After'));
+    noteThrottled(waitSecs);
+    try {
+      await new Promise((r) => setTimeout(r, waitSecs * 1000));
+      // One retry — if the server is still over the limit, surface a
+      // proper 429 error rather than retrying indefinitely.
+      res = await doFetch(method, path, body, init);
+    } finally {
+      clearThrottled();
+    }
+  }
+
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -325,7 +376,7 @@ export const api = {
   probes(): Promise<ProbeType[]> {
     return req('GET', '/probes');
   },
-  serverInfo(): Promise<{ passkeys_enabled: boolean; version: string }> {
+  serverInfo(): Promise<ServerInfo> {
     return req('GET', '/server-info');
   },
 
@@ -499,6 +550,16 @@ export const api = {
   },
   updateHostDefaults(input: HostDefaults): Promise<{ defaults: HostDefaults }> {
     return req('PUT', '/settings/hosts', { defaults: input });
+  },
+
+  // Public mode + anonymous rate limits (admin-only PUT)
+  getPublicMode(): Promise<{ settings: PublicModeSettings }> {
+    return req('GET', '/settings/public');
+  },
+  updatePublicMode(
+    input: PublicModeSettings
+  ): Promise<{ settings: PublicModeSettings }> {
+    return req('PUT', '/settings/public', { settings: input });
   }
 };
 

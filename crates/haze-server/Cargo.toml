@@ -31,3 +31,4 @@ rustls = { workspace = true }
 rand = { workspace = true }
 sqlx = { workspace = true }
 chrono = { workspace = true }
+uuid = { workspace = true }

@@ -7,6 +7,7 @@
     type AdminUser,
     type AlertingSettings,
     type HostDefaults,
+    type PublicModeSettings,
     type RetentionTier,
     type Role,
     type StorageSettings,
@@ -576,6 +577,59 @@
     hostDefaults = { ...DEFAULT_HOST_DEFAULTS };
   }
 
+  // ─── Public mode ──────────────────────────────────────────────────────────
+  let publicLoading = $state(true);
+  let publicLoadErr = $state<string | null>(null);
+  let publicSaving = $state(false);
+  let publicSaveErr = $state<string | null>(null);
+  let publicSaveOk = $state(false);
+
+  const DEFAULT_PUBLIC_MODE: PublicModeSettings = {
+    enabled: false,
+    light_per_minute: 300,
+    light_burst: 60,
+    series_per_minute: 1200,
+    series_burst: 120,
+    sse_max_per_ip: 4
+  };
+  let publicSettings = $state<PublicModeSettings>({ ...DEFAULT_PUBLIC_MODE });
+
+  const publicError = $derived.by(() => {
+    const s = publicSettings;
+    if (!(s.light_per_minute >= 1 && s.light_per_minute <= 100_000))
+      return 'Light requests/min must be 1..100000.';
+    if (!(s.light_burst >= 1 && s.light_burst <= s.light_per_minute))
+      return 'Light burst must be 1..light requests/min.';
+    if (!(s.series_per_minute >= 1 && s.series_per_minute <= 1_000_000))
+      return 'Series requests/min must be 1..1000000.';
+    if (!(s.series_burst >= 1 && s.series_burst <= s.series_per_minute))
+      return 'Series burst must be 1..series requests/min.';
+    if (!(s.sse_max_per_ip >= 1 && s.sse_max_per_ip <= 64))
+      return 'Max SSE connections per IP must be 1..64.';
+    return null;
+  });
+
+  async function savePublicMode() {
+    if (publicError) return;
+    publicSaving = true;
+    publicSaveErr = null;
+    publicSaveOk = false;
+    try {
+      const result = await api.updatePublicMode(publicSettings);
+      publicSettings = { ...result.settings };
+      publicSaveOk = true;
+      setTimeout(() => (publicSaveOk = false), 3000);
+    } catch (e) {
+      publicSaveErr = e instanceof Error ? e.message : 'Failed to save';
+    } finally {
+      publicSaving = false;
+    }
+  }
+
+  function resetPublicMode() {
+    publicSettings = { ...DEFAULT_PUBLIC_MODE };
+  }
+
   // ─── Workers ──────────────────────────────────────────────────────────────
   let workersLoading = $state(true);
   let workersLoadErr = $state<string | null>(null);
@@ -688,30 +742,36 @@
   onMount(async () => {
     if (!canSeeSettings()) return;
     try {
-      const [storageRes, workersRes, alertingRes, hostDefaultsRes] = await Promise.all([
-        api.getStorageSettings().catch((e) => {
-          storageLoadErr = e instanceof Error ? e.message : String(e);
-          return null;
-        }),
-        api.getWorkerSettings().catch((e) => {
-          workersLoadErr = e instanceof Error ? e.message : String(e);
-          return null;
-        }),
-        api.getAlertingSettings().catch((e) => {
-          alertingLoadErr = e instanceof Error ? e.message : String(e);
-          return null;
-        }),
-        api.getHostDefaults().catch((e) => {
-          hostDefaultsLoadErr = e instanceof Error ? e.message : String(e);
-          return null;
-        }),
-        refreshUsers(),
-        refreshWebhooks()
-      ]);
+      const [storageRes, workersRes, alertingRes, hostDefaultsRes, publicRes] =
+        await Promise.all([
+          api.getStorageSettings().catch((e) => {
+            storageLoadErr = e instanceof Error ? e.message : String(e);
+            return null;
+          }),
+          api.getWorkerSettings().catch((e) => {
+            workersLoadErr = e instanceof Error ? e.message : String(e);
+            return null;
+          }),
+          api.getAlertingSettings().catch((e) => {
+            alertingLoadErr = e instanceof Error ? e.message : String(e);
+            return null;
+          }),
+          api.getHostDefaults().catch((e) => {
+            hostDefaultsLoadErr = e instanceof Error ? e.message : String(e);
+            return null;
+          }),
+          api.getPublicMode().catch((e) => {
+            publicLoadErr = e instanceof Error ? e.message : String(e);
+            return null;
+          }),
+          refreshUsers(),
+          refreshWebhooks()
+        ]);
       if (storageRes) applyStorageState(storageRes);
       if (workersRes) pools = { ...workersRes.pools };
       if (alertingRes) alerting = { ...alertingRes.settings };
       if (hostDefaultsRes) hostDefaults = { ...hostDefaultsRes.defaults };
+      if (publicRes) publicSettings = { ...publicRes.settings };
     } finally {
       storageLoading = false;
       workersLoading = false;
@@ -719,6 +779,7 @@
       webhooksLoading = false;
       alertingLoading = false;
       hostDefaultsLoading = false;
+      publicLoading = false;
     }
   });
 
@@ -743,7 +804,7 @@
 {#if !canSeeSettings()}
   <Forbidden what="settings" />
 {:else}
-  <div class="p-6 max-w-4xl space-y-6">
+  <div class="p-3 md:p-6 max-w-4xl space-y-6">
     <h1 class="text-base font-semibold">Settings</h1>
 
     <!-- ════════════════════════════════════════════════════════════════════
@@ -770,7 +831,7 @@
         {:else if users.length === 0}
           <p class="text-xs" style="color: var(--muted)">No users.</p>
         {:else}
-          <table class="w-full text-xs mono">
+          <div class="overflow-x-auto"><table class="w-full text-xs mono">
             <thead style="color: var(--muted)">
               <tr class="text-left">
                 <th class="py-1 pr-2 font-normal">Username</th>
@@ -875,7 +936,7 @@
                 {/if}
               {/each}
             </tbody>
-          </table>
+          </table></div>
         {/if}
 
         <hr class="my-3" style="border-color: var(--border)" />
@@ -958,7 +1019,7 @@
           <p class="text-xs" style="color: var(--latency-bad)">{webhooksLoadErr}</p>
         {:else}
           {#if webhooks.length > 0}
-            <table class="w-full text-xs mono">
+            <div class="overflow-x-auto"><table class="w-full text-xs mono">
               <thead style="color: var(--muted)">
                 <tr class="text-left">
                   <th class="py-1 pr-2 font-normal">Name</th>
@@ -1112,7 +1173,7 @@
                   {/if}
                 {/each}
               </tbody>
-            </table>
+            </table></div>
           {:else}
             <p class="text-[11px]" style="color: var(--muted)">No webhooks defined yet.</p>
           {/if}
@@ -1226,7 +1287,7 @@
         {:else if alertingLoadErr}
           <p class="text-xs" style="color: var(--latency-bad)">{alertingLoadErr}</p>
         {:else}
-          <div class="grid grid-cols-2 gap-3 text-xs">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
             <label class="block">
               <span class="block" style="color: var(--muted)">Eval interval (s)</span>
               <input
@@ -1365,7 +1426,7 @@
           </p>
 
           <div class="rounded border overflow-hidden mb-2" style="border-color: var(--border)">
-            <table class="w-full text-xs mono">
+            <div class="overflow-x-auto"><table class="w-full text-xs mono">
               <thead style="color: var(--muted)">
                 <tr class="text-left">
                   <th class="py-1 px-2 font-normal w-10">#</th>
@@ -1426,7 +1487,7 @@
                   </tr>
                 {/if}
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           <div class="flex gap-2 items-center text-xs">
@@ -1522,7 +1583,7 @@
           </p>
 
           <div class="rounded border overflow-hidden mb-2" style="border-color: var(--border)">
-            <table class="w-full text-xs mono">
+            <div class="overflow-x-auto"><table class="w-full text-xs mono">
               <thead style="color: var(--muted)">
                 <tr class="text-left">
                   <th class="py-1 px-2 font-normal">Pool</th>
@@ -1560,7 +1621,7 @@
                   </td>
                 </tr>
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           {#if workersError}
@@ -1614,7 +1675,7 @@
         {:else if hostDefaultsLoadErr}
           <p class="text-xs" style="color: var(--latency-bad)">{hostDefaultsLoadErr}</p>
         {:else}
-          <div class="grid grid-cols-2 gap-3 text-xs">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
             <label class="block">
               <span class="block" style="color: var(--muted)">Interval (s)</span>
               <input
@@ -1668,6 +1729,153 @@
               style="background: var(--btn-bg); color: var(--btn-text); opacity: {hostDefaultsSaving || hostDefaultsError ? 0.6 : 1}"
             >
               {hostDefaultsSaving ? 'Saving…' : 'Save host defaults'}
+            </button>
+          </div>
+        {/if}
+      </section>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         Public mode
+         ════════════════════════════════════════════════════════════════════ -->
+    <div class="space-y-2">
+      <h2 class="text-sm font-semibold uppercase tracking-wide" style="color: var(--muted)">
+        Public mode
+      </h2>
+      <section class="border rounded p-3" style="border-color: var(--border)">
+        <p class="text-[11px] mb-3" style="color: var(--muted)">
+          When enabled, anonymous visitors land on a trimmed read-only
+          dashboard: they see the tree, search, and host smoke graphs but
+          can't edit anything, see alerting/settings, or know which users
+          exist. Write endpoints stay locked behind authentication.
+          <br />
+          Per-IP rate limits below throttle anonymous traffic only. Your
+          authenticated sessions and API tokens are never limited.
+          Changes apply immediately; no restart required.
+        </p>
+
+        {#if publicLoading}
+          <p class="text-xs" style="color: var(--muted)">Loading…</p>
+        {:else if publicLoadErr}
+          <p class="text-xs" style="color: var(--latency-bad)">{publicLoadErr}</p>
+        {:else}
+          <label class="flex items-center gap-2 text-xs mb-3">
+            <input
+              type="checkbox"
+              bind:checked={publicSettings.enabled}
+            />
+            <span style="color: var(--fg); font-weight: 600">Enable public mode</span>
+            <span style="color: var(--muted)">(anyone can view this dashboard without signing in)</span>
+          </label>
+
+          <h3 class="text-xs font-semibold mb-2">Anonymous rate limits (per IP)</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <label class="block">
+              <span class="block" style="color: var(--muted)">Light requests / min</span>
+              <input
+                bind:value={publicSettings.light_per_minute}
+                type="number"
+                min="1"
+                max="100000"
+                step="1"
+                class="w-full px-2 py-1 rounded border mono"
+                style="background: var(--bg); border-color: var(--border); color: var(--fg)"
+              />
+              <span class="block text-[10px] mt-0.5" style="color: var(--muted)">
+                tree, groups, hosts list/detail, server-info, events. Default 300.
+              </span>
+            </label>
+            <label class="block">
+              <span class="block" style="color: var(--muted)">Light burst</span>
+              <input
+                bind:value={publicSettings.light_burst}
+                type="number"
+                min="1"
+                max="100000"
+                step="1"
+                class="w-full px-2 py-1 rounded border mono"
+                style="background: var(--bg); border-color: var(--border); color: var(--fg)"
+              />
+              <span class="block text-[10px] mt-0.5" style="color: var(--muted)">
+                Tokens available immediately after idle. Default 60.
+              </span>
+            </label>
+            <label class="block">
+              <span class="block" style="color: var(--muted)">Series requests / min</span>
+              <input
+                bind:value={publicSettings.series_per_minute}
+                type="number"
+                min="1"
+                max="1000000"
+                step="1"
+                class="w-full px-2 py-1 rounded border mono"
+                style="background: var(--bg); border-color: var(--border); color: var(--fg)"
+              />
+              <span class="block text-[10px] mt-0.5" style="color: var(--muted)">
+                /hosts/&lt;uuid&gt;/series. Heavier path: viewers paging through
+                hundreds of hosts hit it many times. Default 1200.
+              </span>
+            </label>
+            <label class="block">
+              <span class="block" style="color: var(--muted)">Series burst</span>
+              <input
+                bind:value={publicSettings.series_burst}
+                type="number"
+                min="1"
+                max="1000000"
+                step="1"
+                class="w-full px-2 py-1 rounded border mono"
+                style="background: var(--bg); border-color: var(--border); color: var(--fg)"
+              />
+              <span class="block text-[10px] mt-0.5" style="color: var(--muted)">
+                Tokens available immediately. Default 120.
+              </span>
+            </label>
+            <label class="block">
+              <span class="block" style="color: var(--muted)">Max SSE connections / IP</span>
+              <input
+                bind:value={publicSettings.sse_max_per_ip}
+                type="number"
+                min="1"
+                max="64"
+                step="1"
+                class="w-full px-2 py-1 rounded border mono"
+                style="background: var(--bg); border-color: var(--border); color: var(--fg)"
+              />
+              <span class="block text-[10px] mt-0.5" style="color: var(--muted)">
+                Hard cap on simultaneous live-refresh streams from one IP.
+                Default 4.
+              </span>
+            </label>
+          </div>
+
+          {#if publicError}
+            <p class="mt-2 text-xs" style="color: var(--latency-warn)">⚠ {publicError}</p>
+          {/if}
+          {#if publicSaveErr}
+            <p class="mt-2 text-xs" style="color: var(--latency-bad)">{publicSaveErr}</p>
+          {/if}
+          {#if publicSaveOk}
+            <p class="mt-2 text-xs" style="color: var(--latency-good)">Saved.</p>
+          {/if}
+
+          <div class="flex gap-2 mt-3 justify-end items-center text-xs">
+            <button
+              type="button"
+              onclick={resetPublicMode}
+              class="px-2 py-1 rounded border"
+              style="border-color: var(--border)"
+            >
+              Reset to defaults
+            </button>
+            <button
+              type="button"
+              onclick={savePublicMode}
+              disabled={publicSaving || !!publicError}
+              class="px-3 py-1 rounded font-medium"
+              style="background: var(--btn-bg); color: var(--btn-text); opacity: {publicSaving || publicError ? 0.6 : 1}"
+            >
+              {publicSaving ? 'Saving…' : 'Save public mode settings'}
             </button>
           </div>
         {/if}

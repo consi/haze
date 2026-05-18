@@ -8,7 +8,10 @@ use haze_store::{HzcStore, SeriesStore};
 use sqlx::SqlitePool;
 use tokio::sync::{Notify, broadcast};
 
-use crate::events_routes::ChangeKind;
+use crate::{
+    events_routes::ChangeKind,
+    rate_limit::{LimiterHandle, SsePerIpMap},
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -39,6 +42,14 @@ pub struct AppState {
     /// back on URLs under the deployment sub-path. Empty string means root
     /// (handlers render `Path=/`).
     pub cookie_path: String,
+    /// Per-IP token buckets the rate-limit middleware consults for
+    /// anonymous requests. Built from `PublicModeSettings` at startup and
+    /// hot-swapped when an admin saves new limits.
+    pub limiters: LimiterHandle,
+    /// Per-IP concurrent SSE connection counters. Each `/api/v1/events`
+    /// handler holds a guard for the duration of the stream so a
+    /// disconnect frees the slot automatically.
+    pub sse_per_ip: SsePerIpMap,
 }
 
 impl AppState {

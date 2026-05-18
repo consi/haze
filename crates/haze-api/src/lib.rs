@@ -2,6 +2,7 @@
 
 use axum::{Json, Router, extract::State, middleware as axum_mw, response::Html, routing::get};
 use haze_probe::ProbeKind;
+use haze_store::repo::settings as store_settings;
 use serde::Serialize;
 use utoipa::{
     Modify, OpenApi,
@@ -17,50 +18,62 @@ mod groups_routes;
 mod hosts_routes;
 mod middleware;
 mod passkey_routes;
+pub mod rate_limit;
 mod settings_routes;
 mod state;
 mod tree_routes;
 mod user_routes;
 
 pub use events_routes::ChangeKind;
+pub use rate_limit::{LimiterHandle, SsePerIpMap, new_handle, new_sse_map};
 pub use state::AppState;
 
 pub fn api_router(state: AppState) -> Router {
-    let v1 = v1_router(&state).with_state(state);
+    let v1 = v1_router(&state).with_state(state.clone());
 
     Router::new()
         .nest("/v1", v1)
         .route("/openapi.json", get(openapi_json))
         .route("/docs", get(swagger_ui_html))
+        .with_state(state)
 }
 
-async fn swagger_ui_html() -> Html<&'static str> {
-    Html(
+/// Swagger UI page. The `OpenAPI` URL is built as an absolute path so a
+/// trailing-slash visit (`/api/docs/`) resolves it correctly — otherwise
+/// the relative `openapi.json` would resolve to
+/// `/api/docs/openapi.json`, fall through to the SPA index.html, and
+/// Swagger UI would render a "Parser error on line N / invalid version
+/// field" page after trying to parse HTML as YAML. `state.cookie_path`
+/// is the normalised `HAZE_BASE_URL` (empty in root mode), so the path
+/// works for sub-path deployments too.
+async fn swagger_ui_html(State(state): State<AppState>) -> Html<String> {
+    let spec_url = format!("{}/api/openapi.json", state.cookie_path);
+    Html(format!(
         r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Haze API</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
-    <style>body{margin:0;background:#fafbfc}</style>
+    <style>body{{margin:0;background:#fafbfc}}</style>
 </head>
 <body>
     <div id="swagger-ui"></div>
     <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
     <script>
-        window.onload = () => {
-            window.ui = SwaggerUIBundle({
-                url: 'openapi.json',
+        window.onload = () => {{
+            window.ui = SwaggerUIBundle({{
+                url: '{spec_url}',
                 dom_id: '#swagger-ui',
                 deepLinking: true,
                 persistAuthorization: true
-            });
-        };
+            }});
+        }};
     </script>
 </body>
 </html>
-"#,
-    )
+"#
+    ))
 }
 
 pub fn v1_router(state: &AppState) -> Router<AppState> {
@@ -77,6 +90,13 @@ pub fn v1_router(state: &AppState) -> Router<AppState> {
         .nest("/admin", admin_routes::router())
         .nest("/alerts", alerts_routes::router())
         .nest("/events", events_routes::router())
+        // Order matters: session_layer runs first to attach `CurrentUser`,
+        // then rate_limit_layer reads that extension to bypass the limiter
+        // for authenticated requests.
+        .layer(axum_mw::from_fn_with_state(
+            state.clone(),
+            rate_limit::rate_limit_layer,
+        ))
         .layer(axum_mw::from_fn_with_state(
             state.clone(),
             middleware::session_layer,
@@ -149,6 +169,8 @@ impl Modify for SecurityAddon {
         settings_routes::update_alerting,
         settings_routes::get_host_defaults,
         settings_routes::update_host_defaults,
+        settings_routes::get_public_mode,
+        settings_routes::update_public_mode,
         admin_routes::list_users,
         admin_routes::create_user,
         admin_routes::update_user,
@@ -209,8 +231,11 @@ impl Modify for SecurityAddon {
         settings_routes::UpdateAlertingSettingsReq,
         settings_routes::HostDefaultsResp,
         settings_routes::UpdateHostDefaultsReq,
+        settings_routes::PublicModeSettingsResp,
+        settings_routes::UpdatePublicModeSettingsReq,
         haze_store::AlertingSettings,
         haze_store::HostDefaults,
+        haze_store::PublicModeSettings,
         admin_routes::AdminUserResp,
         admin_routes::CreateUserReq,
         admin_routes::UpdateUserReq,
@@ -245,8 +270,82 @@ impl Modify for SecurityAddon {
 )]
 struct ApiDoc;
 
-async fn openapi_json() -> Json<utoipa::openapi::OpenApi> {
-    Json(ApiDoc::openapi())
+/// Endpoints callable without a session or token regardless of settings:
+/// public-info pings, the login routes themselves.
+const ALWAYS_ANONYMOUS: &[(&str, &str)] = &[
+    ("/api/v1/server-info", "get"),
+    ("/api/v1/probes", "get"),
+    ("/api/v1/auth/login", "post"),
+    ("/api/v1/auth/passkey/login/begin", "post"),
+    ("/api/v1/auth/passkey/login/finish", "post"),
+];
+
+/// Endpoints anonymous-callable ONLY when public mode is enabled. Mirror
+/// the handlers that take `ViewerAccess` so the spec's padlocks track the
+/// runtime gate exactly.
+const PUBLIC_MODE_ANONYMOUS: &[(&str, &str)] = &[
+    ("/api/v1/tree", "get"),
+    ("/api/v1/groups", "get"),
+    ("/api/v1/groups/{uuid}", "get"),
+    ("/api/v1/hosts", "get"),
+    ("/api/v1/hosts/{uuid}", "get"),
+    ("/api/v1/hosts/{uuid}/series", "get"),
+    ("/api/v1/settings/storage", "get"),
+];
+
+/// Serve the generated `OpenAPI` document.
+///
+/// Two runtime rewrites on top of the compile-time `ApiDoc`:
+///
+/// 1. `servers` is injected from `state.cookie_path` so the spec stays
+///    correct under `HAZE_BASE_URL` — the path entries are hardcoded
+///    `/api/v1/...` and any consumer (Swagger UI's "Try it out", client
+///    generators) needs the deployment base prefix.
+///
+/// 2. `security: []` is set on anonymous-callable endpoints so Swagger UI
+///    doesn't render a padlock that misrepresents them as authenticated.
+///    The conditional set tracks the live `public_mode.enabled` setting,
+///    so the padlock disappears the moment an admin flips public mode on
+///    and reappears when they flip it off.
+///
+/// Serializing to `serde_json::Value` and mutating that avoids coupling
+/// to utoipa's internal path/operation struct layout, which has changed
+/// across releases.
+async fn openapi_json(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let spec = ApiDoc::openapi();
+    let mut value = serde_json::to_value(&spec).expect("OpenApi spec must serialise");
+
+    let server_url = if state.cookie_path.is_empty() {
+        "/".to_string()
+    } else {
+        state.cookie_path.clone()
+    };
+    value["servers"] = serde_json::json!([{ "url": server_url }]);
+
+    let public_mode_enabled = store_settings::public_mode_settings(&state.pool)
+        .await
+        .is_ok_and(|s| s.enabled);
+    let mut anon: Vec<(&str, &str)> = ALWAYS_ANONYMOUS.to_vec();
+    if public_mode_enabled {
+        anon.extend_from_slice(PUBLIC_MODE_ANONYMOUS);
+    }
+
+    if let Some(paths) = value.get_mut("paths").and_then(|v| v.as_object_mut()) {
+        for (path, method) in &anon {
+            if let Some(op) = paths
+                .get_mut(*path)
+                .and_then(|p| p.as_object_mut())
+                .and_then(|p| p.get_mut(*method))
+                .and_then(|m| m.as_object_mut())
+            {
+                // Empty array = "no security requirement" in OpenAPI 3.x;
+                // overrides the top-level global declaration for this op.
+                op.insert("security".to_string(), serde_json::json!([]));
+            }
+        }
+    }
+
+    Json(value)
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -260,6 +359,10 @@ struct ProbeDescriptor {
 struct ServerInfo {
     /// Whether `WebAuthn` passkeys are configured (i.e. `HAZE_ORIGIN` was set).
     passkeys_enabled: bool,
+    /// Whether anonymous browsing of the dashboard is enabled. When true,
+    /// the frontend renders a trimmed read-only UI for visitors without a
+    /// session and the read API endpoints accept anonymous calls.
+    public_mode_enabled: bool,
     /// Server version (`CARGO_PKG_VERSION`).
     version: String,
 }
@@ -273,8 +376,15 @@ struct ServerInfo {
     tag = "probes"
 )]
 async fn server_info(State(state): State<AppState>) -> Json<ServerInfo> {
+    // Reading the public-mode flag is intentionally not gated: the frontend
+    // calls this before login to decide whether to render the trimmed
+    // public layout, and `bool` reveals nothing sensitive on its own.
+    let public_mode_enabled = store_settings::public_mode_settings(&state.pool)
+        .await
+        .is_ok_and(|s| s.enabled);
     Json(ServerInfo {
         passkeys_enabled: state.passkeys.is_some(),
+        public_mode_enabled,
         version: env!("CARGO_PKG_VERSION").to_string(),
     })
 }

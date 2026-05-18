@@ -243,7 +243,7 @@
 {#if !canSeeAlerts()}
   <Forbidden what="alerting" />
 {:else}
-  <div class="p-6 w-full space-y-4">
+  <div class="p-3 md:p-6 w-full space-y-4">
     <div class="flex items-center justify-between">
       <h1 class="text-base font-semibold">Alerting</h1>
       {#if canEditAlerts()}
@@ -278,6 +278,7 @@
       </section>
     {:else}
       <section class="border rounded overflow-hidden" style="border-color: var(--border)">
+        <div class="overflow-x-auto">
         <table class="w-full text-xs mono">
           <thead style="color: var(--muted)">
             <tr class="text-left">
@@ -382,6 +383,7 @@
             {/each}
           </tbody>
         </table>
+        </div>
       </section>
 
       {#if states.some((s) => s.severity !== 'ok')}
@@ -389,6 +391,7 @@
           <h2 class="text-xs font-semibold mb-2" style="color: var(--muted)">
             Currently firing
           </h2>
+          <div class="overflow-x-auto -mx-3 px-3">
           <table class="w-full text-xs mono">
             <thead style="color: var(--muted)">
               <tr class="text-left">
@@ -431,6 +434,7 @@
               {/each}
             </tbody>
           </table>
+          </div>
         </section>
       {/if}
     {/if}

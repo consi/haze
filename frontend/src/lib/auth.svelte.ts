@@ -13,6 +13,27 @@ export const auth = $state<{
   error: null
 });
 
+// Whether the server allows anonymous browsing of the read-only UI. Set
+// from `/server-info` early in the layout's onMount, refreshed when the
+// `Settings` SSE event fires (admin toggling the flag). When true and
+// `auth.user` is null, the layout renders the trimmed public variant
+// instead of redirecting to /login.
+//
+// `initialized` distinguishes "we haven't asked the server yet" from "we
+// asked and the answer was no". Any code that decides to redirect
+// unauthenticated traffic to /login MUST gate on `initialized`, otherwise
+// the first render (default `enabled = false`) bounces the visitor before
+// the /server-info fetch resolves.
+export const publicMode = $state<{ enabled: boolean; initialized: boolean }>({
+  enabled: false,
+  initialized: false
+});
+
+export function setPublicMode(enabled: boolean) {
+  publicMode.enabled = enabled;
+  publicMode.initialized = true;
+}
+
 // Role-gating helpers - mirror the four roles defined in
 // crates/haze-auth::user::Role (admin / user / reader / disabled).
 // Always check via these helpers rather than comparing role strings inline,

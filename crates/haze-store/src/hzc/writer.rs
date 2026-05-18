@@ -230,6 +230,7 @@ impl HostWriter {
                     start,
                     end,
                     0, // raw resolution
+                    0, // generation 0 — per-window chunk
                     &records,
                 )?;
                 let _ = fs::remove_file(path);
@@ -326,7 +327,8 @@ impl HostWriter {
             chunk.seq,
             chunk.start_ts,
             chunk.end_ts,
-            0,
+            0, // raw resolution
+            0, // generation 0 — per-window chunk
             &chunk.samples,
         )?;
         let _ = fs::remove_file(&chunk.wal_path);
@@ -381,7 +383,12 @@ fn chunks_for_seq(chunks_dir: &Path, seq: u64) -> Result<Option<PathBuf>, HzcErr
         let entry = entry?;
         let path = entry.path();
         if let Ok(cr) = parse_chunk_filename(&path) {
-            if cr.seq == seq {
+            // A WAL at `<seq>.wal` was sealed by a `g0` chunk at the same
+            // seq — that's the crash-recovery short-circuit. A bundle (g≥1)
+            // happens to use seqs from the same numeric range but does NOT
+            // represent the seal of any single WAL; ignore it here, otherwise
+            // we'd delete the live writer's open WAL on restart.
+            if cr.seq == seq && cr.generation == 0 {
                 return Ok(Some(path));
             }
         }
@@ -390,18 +397,19 @@ fn chunks_for_seq(chunks_dir: &Path, seq: u64) -> Result<Option<PathBuf>, HzcErr
 }
 
 /// Encode + atomically rename in a chunk file. Shared by the writer's
-/// normal seal path and the recovery path; the compactor uses the same
-/// helper.
+/// normal seal path, the crash-recovery path, and the compactor — including
+/// the rollup pass that emits `generation = 1` daily bundles.
 pub(super) fn seal_chunk_inline(
     host_dir: &Path,
     seq: u64,
     start_ts: i64,
     end_ts: i64,
     resolution_secs: u32,
+    generation: u8,
     samples: &[(i64, Slot)],
 ) -> Result<(), HzcError> {
     let bytes = encode_chunk(samples)?;
-    let filename = chunk_filename(seq, resolution_secs, start_ts, end_ts);
+    let filename = chunk_filename(seq, resolution_secs, generation, start_ts, end_ts);
     let chunks_dir = host_dir.join(CHUNKS_DIR);
     fs::create_dir_all(&chunks_dir)?;
     let tmp = chunks_dir.join(format!("{filename}.tmp"));

@@ -1,8 +1,9 @@
 <script lang="ts">
   import uPlot from 'uplot';
   import 'uplot/dist/uPlot.min.css';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { SeriesResp } from '$lib/api';
+  import { startViewportTracking, viewport } from '$lib/viewport.svelte';
 
   let {
     series,
@@ -48,6 +49,58 @@
     flipDown: boolean;
     sample: TipSample | null;
   }>({ visible: false, x: 0, y: 0, flipRight: false, flipDown: false, sample: null });
+
+  // Touch interaction state machine. uPlot's built-in cursor drag is
+  // mouse-only (mousedown/mousemove/mouseup) and modern browsers don't
+  // synthesise mouse drag events from touch, so on mobile we drive the
+  // gestures ourselves with pointer events:
+  //
+  // - 'pending'  — finger is down; we're waiting to see if it becomes a
+  //                tap, long-press, or drag. Tooltip suppressed.
+  // - 'tooltip'  — held still for ~400 ms; tooltip appears and follows
+  //                the finger horizontally. Page scrolls if user slides
+  //                vertically (handled by touch-action: pan-y below).
+  // - 'drag'     — moved past the threshold before long-press; we draw
+  //                a horizontal selection band and zoom to it on release.
+  // - 'idle'     — nothing pressed. Tooltip from the previous gesture
+  //                stays visible until the next pointerdown.
+  //
+  // A quick tap (released < long-press, < threshold movement) checks the
+  // double-tap window: two taps within 300 ms / 30 px → zoom out.
+  type TouchState = 'idle' | 'pending' | 'tooltip' | 'drag';
+  // $state so the SmokeChart effects below can gate live-mode redraws on
+  // it — without that, a 1 s live tick from the parent host page shifts
+  // the chart's x-scale out from under the user's finger mid-drag and
+  // the zoom-to-band on release lands on the wrong time range.
+  let touchState = $state<TouchState>('idle');
+  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  let touchStartPos: { x: number; y: number } | null = null;
+  let touchDragRect = $state<{ startX: number; endX: number } | null>(null);
+  let lastTapTime = 0;
+  let lastTapPos: { x: number; y: number } | null = null;
+  const LONG_PRESS_MS = 400;
+  const MOVE_THRESHOLD_PX = 10;
+  const DOUBLE_TAP_MS = 300;
+  const DOUBLE_TAP_PX = 30;
+
+  onMount(() => {
+    const stopViewport = startViewportTracking();
+    // Document-level capture-phase listeners so we update touchState
+    // BEFORE uPlot's element-level listeners fire. Otherwise the
+    // setCursor hook below would see touchState === 'idle' on the very
+    // first cursor update of a touch session and let the tooltip flash.
+    document.addEventListener('pointerdown', onPointerDownCapture, true);
+    document.addEventListener('pointermove', onPointerMoveCapture, true);
+    document.addEventListener('pointerup', onPointerUpCapture, true);
+    document.addEventListener('pointercancel', onPointerCancelCapture, true);
+    return () => {
+      stopViewport();
+      document.removeEventListener('pointerdown', onPointerDownCapture, true);
+      document.removeEventListener('pointermove', onPointerMoveCapture, true);
+      document.removeEventListener('pointerup', onPointerUpCapture, true);
+      document.removeEventListener('pointercancel', onPointerCancelCapture, true);
+    };
+  });
 
   // Locale-aware date formatters.
   const fmtDayMonth = new Intl.DateTimeFormat(undefined, {
@@ -150,30 +203,45 @@
       ctx.save();
       clip(u);
       ctx.fillStyle = withAlpha(fill, alpha);
-      type Pt = { x: number; low: number; high: number };
+      type Pt = { idx: number; x: number; low: number; high: number };
       let chain: Pt[] = [];
+      // At a chain endpoint (last reachable before an unreachable run, or
+      // first after) we extend to the midpoint with the actual neighbour
+      // data point rather than the conservative ±halfBucket. That makes
+      // the band meet the unreachable rect exactly even when the data is
+      // non-uniformly spaced (e.g. probe slipped a beat around the
+      // outage). Only at the absolute start/end of the data array does
+      // the halfBucket fallback apply.
+      const leftEdgeX = (k: number, arr: Pt[]) => {
+        const p = arr[k];
+        if (k > 0) return (arr[k - 1].x + p.x) / 2;
+        if (p.idx > 0) return (xs[p.idx - 1] + p.x) / 2;
+        return p.x - halfBucket;
+      };
+      const rightEdgeX = (k: number, arr: Pt[]) => {
+        const p = arr[k];
+        if (k < arr.length - 1) return (p.x + arr[k + 1].x) / 2;
+        if (p.idx < xs.length - 1) return (p.x + xs[p.idx + 1]) / 2;
+        return p.x + halfBucket;
+      };
       const drawPolygon = (arr: Pt[]) => {
         const n = arr.length;
         if (n === 0) return;
         const path = new Path2D();
         for (let k = 0; k < n; k++) {
           const p = arr[k];
-          const leftX = k > 0 ? (arr[k - 1].x + p.x) / 2 : p.x - halfBucket;
-          const rightX = k < n - 1 ? (p.x + arr[k + 1].x) / 2 : p.x + halfBucket;
+          const lx = u.valToPos(leftEdgeX(k, arr), 'x', true);
+          const rx = u.valToPos(rightEdgeX(k, arr), 'x', true);
           const yTop = u.valToPos(p.high, 'y', true);
-          const lx = u.valToPos(leftX, 'x', true);
-          const rx = u.valToPos(rightX, 'x', true);
           if (k === 0) path.moveTo(lx, yTop);
           else path.lineTo(lx, yTop);
           path.lineTo(rx, yTop);
         }
         for (let k = n - 1; k >= 0; k--) {
           const p = arr[k];
-          const leftX = k > 0 ? (arr[k - 1].x + p.x) / 2 : p.x - halfBucket;
-          const rightX = k < n - 1 ? (p.x + arr[k + 1].x) / 2 : p.x + halfBucket;
+          const lx = u.valToPos(leftEdgeX(k, arr), 'x', true);
+          const rx = u.valToPos(rightEdgeX(k, arr), 'x', true);
           const yBot = u.valToPos(p.low, 'y', true);
-          const lx = u.valToPos(leftX, 'x', true);
-          const rx = u.valToPos(rightX, 'x', true);
           path.lineTo(rx, yBot);
           path.lineTo(lx, yBot);
         }
@@ -190,7 +258,7 @@
         const lo = lows[i];
         const hi = highs[i];
         if (lo != null && hi != null) {
-          chain.push({ x: xs[i], low: lo, high: hi });
+          chain.push({ idx: i, x: xs[i], low: lo, high: hi });
         } else if (isUnreachable(losses[i])) {
           flush();
         }
@@ -214,6 +282,22 @@
       ctx.lineJoin = 'miter';
       type Pt = { idx: number; x: number; y: number };
       let chain: Pt[] = [];
+      // Same logic as bandDrawer: chain endpoints meet the unreachable
+      // rect's edge (midpoint to the neighbouring data point in xs)
+      // rather than falling back to ±halfBucket, which left a visible
+      // gap when probe spacing was non-uniform around an outage.
+      const leftEdgeX = (k: number, arr: Pt[]) => {
+        const p = arr[k];
+        if (k > 0) return (arr[k - 1].x + p.x) / 2;
+        if (p.idx > 0) return (xs[p.idx - 1] + p.x) / 2;
+        return p.x - halfBucket;
+      };
+      const rightEdgeX = (k: number, arr: Pt[]) => {
+        const p = arr[k];
+        if (k < arr.length - 1) return (p.x + arr[k + 1].x) / 2;
+        if (p.idx < xs.length - 1) return (p.x + xs[p.idx + 1]) / 2;
+        return p.x + halfBucket;
+      };
       const drawChain = (arr: Pt[]) => {
         ctx.lineWidth = 2;
         ctx.strokeStyle = '#000';
@@ -232,11 +316,9 @@
         ctx.lineWidth = 4;
         for (let k = 0; k < arr.length; k++) {
           const p = arr[k];
-          const leftX = k > 0 ? (arr[k - 1].x + p.x) / 2 : p.x - halfBucket;
-          const rightX = k < arr.length - 1 ? (p.x + arr[k + 1].x) / 2 : p.x + halfBucket;
           const yPx = u.valToPos(p.y, 'y', true);
-          const lx = u.valToPos(leftX, 'x', true);
-          const rx = u.valToPos(rightX, 'x', true);
+          const lx = u.valToPos(leftEdgeX(k, arr), 'x', true);
+          const rx = u.valToPos(rightEdgeX(k, arr), 'x', true);
           ctx.strokeStyle = lossColor(losses[p.idx]);
           ctx.beginPath();
           ctx.moveTo(lx, yPx);
@@ -323,15 +405,139 @@
     if (v < 1) return `${v.toFixed(1)}%`;
     return `${Math.round(v)}%`;
   }
-  function onContextMenu(e: MouseEvent) {
-    e.preventDefault();
+  function zoomOutOneWindow() {
     if (!onZoom) return;
     const span = series.to - series.from;
     if (span <= 0) return;
-    // Right-click zooms out: keep the right edge ("now"-side) anchored and
-    // extend the range backwards by another full span. That doubles the
-    // visible window each click, naturally showing more history.
+    // Zoom out: keep the right edge ("now"-side) anchored and extend the
+    // range backwards by another full span. That doubles the visible
+    // window each click, naturally showing more history.
     onZoom(Math.round(series.from - span), Math.round(series.to));
+  }
+
+  function onContextMenu(e: MouseEvent) {
+    e.preventDefault();
+    zoomOutOneWindow();
+  }
+
+  function touchInsideWrapper(e: PointerEvent): boolean {
+    if (e.pointerType !== 'touch') return false;
+    if (!wrapper) return false;
+    if (!(e.target instanceof Node)) return false;
+    return wrapper.contains(e.target);
+  }
+
+  function onPointerDownCapture(e: PointerEvent) {
+    if (!touchInsideWrapper(e)) return;
+    touchState = 'pending';
+    touchStartPos = { x: e.clientX, y: e.clientY };
+    touchDragRect = null;
+    // Hide any tooltip left over from the previous gesture immediately
+    // so a fresh tap doesn't flash old data while we wait for long-press.
+    tip.visible = false;
+    if (longPressTimer) clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(() => {
+      if (touchState !== 'pending') return;
+      touchState = 'tooltip';
+      longPressTimer = null;
+      // Trigger uPlot's setCursor so the existing hook computes the
+      // tooltip sample at the press location. With touchState ===
+      // 'tooltip', the hook's suppression gate lets the tooltip render.
+      if (plot && touchStartPos && wrapper) {
+        const rect = wrapper.getBoundingClientRect();
+        plot.setCursor(
+          { left: touchStartPos.x - rect.left, top: touchStartPos.y - rect.top },
+          false
+        );
+      }
+    }, LONG_PRESS_MS);
+  }
+
+  function onPointerMoveCapture(e: PointerEvent) {
+    if (e.pointerType !== 'touch') return;
+    if (touchState === 'idle' || !touchStartPos || !wrapper) return;
+
+    if (touchState === 'tooltip') {
+      // Slide the tooltip with the finger.
+      if (plot) {
+        const rect = wrapper.getBoundingClientRect();
+        plot.setCursor({ left: e.clientX - rect.left, top: e.clientY - rect.top }, false);
+      }
+      return;
+    }
+
+    const dx = e.clientX - touchStartPos.x;
+    if (touchState === 'pending' && Math.abs(dx) > MOVE_THRESHOLD_PX) {
+      touchState = 'drag';
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    }
+    if (touchState === 'drag') {
+      const rect = wrapper.getBoundingClientRect();
+      touchDragRect = {
+        startX: touchStartPos.x - rect.left,
+        endX: e.clientX - rect.left
+      };
+    }
+  }
+
+  function onPointerUpCapture(e: PointerEvent) {
+    if (e.pointerType !== 'touch') return;
+    if (touchState === 'idle') return;
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    const prev = touchState;
+
+    if (prev === 'drag' && touchDragRect && plot && onZoom) {
+      const lo = Math.min(touchDragRect.startX, touchDragRect.endX);
+      const hi = Math.max(touchDragRect.startX, touchDragRect.endX);
+      if (hi - lo > MOVE_THRESHOLD_PX) {
+        const startVal = plot.posToVal(lo, 'x');
+        const endVal = plot.posToVal(hi, 'x');
+        onZoom(Math.round(startVal), Math.round(endVal));
+      }
+    }
+
+    if (prev === 'pending' && touchStartPos) {
+      // Quick tap — possibly the second tap of a double-tap.
+      const now = performance.now();
+      if (lastTapPos && now - lastTapTime < DOUBLE_TAP_MS) {
+        const ddx = touchStartPos.x - lastTapPos.x;
+        const ddy = touchStartPos.y - lastTapPos.y;
+        if (Math.hypot(ddx, ddy) < DOUBLE_TAP_PX) {
+          zoomOutOneWindow();
+          lastTapTime = 0;
+          lastTapPos = null;
+          touchState = 'idle';
+          touchStartPos = null;
+          touchDragRect = null;
+          return;
+        }
+      }
+      lastTapTime = now;
+      lastTapPos = { x: touchStartPos.x, y: touchStartPos.y };
+    }
+
+    // Tooltip stays visible after a long-press release; next pointerdown
+    // wipes it. Drag rect is purely transient.
+    touchDragRect = null;
+    touchStartPos = null;
+    touchState = 'idle';
+  }
+
+  function onPointerCancelCapture(e: PointerEvent) {
+    if (e.pointerType !== 'touch') return;
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    touchState = 'idle';
+    touchStartPos = null;
+    touchDragRect = null;
   }
 
   function formatTipTimestamp(secs: number): string {
@@ -479,6 +685,13 @@
         ],
         setCursor: [
           (u) => {
+            // Suppress the tooltip while a touch is pending or actively
+            // dragging — quick taps and pinch-zoom hand-offs should NOT
+            // flash the tooltip just because uPlot moved the cursor.
+            if (touchState === 'pending' || touchState === 'drag') {
+              tip.visible = false;
+              return;
+            }
             const idx = u.cursor.idx;
             const left = u.cursor.left ?? -1;
             const top = u.cursor.top ?? -1;
@@ -559,6 +772,11 @@
     if (!container) return;
     const data = pack(series);
     if (plot) {
+      // Skip live-refresh redraws while the user is mid-touch — the
+      // setData/setScale combo refits the visible window and ruins
+      // in-flight zoom gestures. Once touchState flips back to 'idle'
+      // the effect re-runs and applies the latest data.
+      if (touchState !== 'idle') return;
       plot.setData(data, true);
       // setData(true) refits the x scale to the data; if the parent has
       // pinned a window we need to re-apply it right away so the right edge
@@ -589,6 +807,8 @@
     const max = xMax;
     if (!plot || min == null || max == null) return;
     if (min === lastXMin && max === lastXMax) return;
+    // Same touchState gate — don't shift the scale under a finger.
+    if (touchState !== 'idle') return;
     plot.setScale('x', { min, max });
     lastXMin = min;
     lastXMax = max;
@@ -604,12 +824,22 @@
   <div
     bind:this={wrapper}
     class="w-full relative"
-    style="height: {height}px"
+    style="height: {height}px; touch-action: pan-y; -webkit-user-select: none; user-select: none"
     oncontextmenu={onContextMenu}
     role="presentation"
   >
     <div bind:this={container} class="w-full h-full overflow-hidden"></div>
-    {#if tip.visible && tip.sample}
+    <!-- Touch-mode drag-to-zoom selection band. uPlot's built-in drag is
+         mouse-only, so on touch we paint our own translucent band from
+         the press position to the current finger position and call
+         onZoom on release. -->
+    {#if touchDragRect}
+      <div
+        class="absolute pointer-events-none"
+        style="left: {Math.min(touchDragRect.startX, touchDragRect.endX)}px; width: {Math.abs(touchDragRect.endX - touchDragRect.startX)}px; top: 0; bottom: 0; background: rgba(78, 161, 255, 0.18); border-left: 1px solid rgba(78, 161, 255, 0.55); border-right: 1px solid rgba(78, 161, 255, 0.55)"
+      ></div>
+    {/if}
+    {#if tip.visible && tip.sample && !viewport.isMobile}
       {@const s = tip.sample}
       <div
         class="absolute pointer-events-none rounded shadow-md text-xs"
@@ -656,6 +886,35 @@
     </div>
   </div>
 </div>
+
+<!-- Mobile tooltip: pinned to the bottom of the viewport so the finger
+     never occludes the data point under inspection. Only renders after
+     the long-press timer has fired (touchState leaves 'pending'/'drag').
+     Stays visible until the next pointerdown.
+     Layout: line 1 timestamp, line 2 p97.5 + p75, line 3 median + loss,
+     line 4 p25 + p2.5. Each label-value pair uses a normal space so the
+     label visually separates from the value. -->
+{#if viewport.isMobile && tip.visible && tip.sample}
+  {@const s = tip.sample}
+  <div
+    class="fixed bottom-0 left-0 right-0 z-30 mono pointer-events-none leading-tight"
+    style="background: var(--bg); border-top: 1px solid var(--border); color: var(--fg); padding: 6px 10px env(safe-area-inset-bottom, 6px); font-size: 12px"
+  >
+    <div class="font-medium" style="color: var(--muted)">{formatTipTimestamp(s.ts)}</div>
+    <div class="flex flex-wrap gap-x-5 mt-0.5">
+      <span><span style="color: var(--smoke-outer-text)">p97.5</span> {formatMs(s.p97_5)}</span>
+      <span><span style="color: var(--smoke-inner-text)">p75</span> {formatMs(s.p75)}</span>
+    </div>
+    <div class="flex flex-wrap gap-x-5">
+      <span class="font-semibold"><span style="color: var(--muted); font-weight: 400">median</span> <span style="color: {lossColor(s.loss_pct)}">{formatMs(s.median)}</span></span>
+      <span class="font-semibold"><span style="color: var(--muted); font-weight: 400">loss</span> <span style="{s.loss_pct === 100 ? 'color: var(--latency-bad)' : ''}">{formatLoss(s.loss_pct)}</span></span>
+    </div>
+    <div class="flex flex-wrap gap-x-5">
+      <span><span style="color: var(--smoke-inner-text)">p25</span> {formatMs(s.p25)}</span>
+      <span><span style="color: var(--smoke-outer-text)">p2.5</span> {formatMs(s.p2_5)}</span>
+    </div>
+  </div>
+{/if}
 
 <style>
   /* Override uPlot's default cursor crosshair: solid 1px light gray vertical

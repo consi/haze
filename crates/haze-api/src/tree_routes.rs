@@ -4,7 +4,6 @@
 //! mutation is one HTTP request rather than two.
 
 use axum::{Json, Router, extract::State, routing::get};
-use haze_auth::CurrentUser;
 use haze_store::repo::{
     groups,
     hosts::{self, GroupFilter},
@@ -12,7 +11,9 @@ use haze_store::repo::{
 use serde::Serialize;
 use utoipa::ToSchema;
 
-use crate::{error::ApiResult, groups_routes, hosts_routes, state::AppState};
+use crate::{
+    error::ApiResult, groups_routes, hosts_routes, middleware::ViewerAccess, state::AppState,
+};
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/", get(tree))
@@ -33,7 +34,7 @@ pub(crate) struct TreeResp {
     tag = "tree"
 )]
 pub(crate) async fn tree(
-    _user: CurrentUser,
+    _viewer: ViewerAccess,
     State(state): State<AppState>,
 ) -> ApiResult<Json<TreeResp>> {
     // Both reads hit the same WAL'd SQLite pool; serializing them is

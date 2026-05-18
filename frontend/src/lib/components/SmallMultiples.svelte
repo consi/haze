@@ -157,10 +157,10 @@
   <div
     bind:this={gridContainer}
     class="grid gap-2"
-    style="grid-template-columns: repeat(auto-fit, minmax(420px, 1fr))"
+    style="grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr))"
   >
     {#each panels as panel}
-      <div class="border rounded p-2" style="border-color: var(--border)">
+      <div class="border rounded p-1 md:p-2" style="border-color: var(--border)">
         <div class="text-[10px] mb-1" style="color: var(--muted)">
           <span>{panel.label}</span>
         </div>

@@ -2,6 +2,7 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use axum::{Router, routing::get};
+use dashmap::DashMap;
 use haze_auth::PasskeyService;
 use haze_probe::scheduler::Scheduler;
 use haze_store::{HzcStore, SeriesStore, hzc::compactor, repo::settings};
@@ -9,6 +10,20 @@ use tower::Layer;
 use tower_http::{
     compression::CompressionLayer, normalize_path::NormalizePathLayer, trace::TraceLayer,
 };
+use uuid::Uuid;
+
+/// Per-host mutex map shared between the downsampling compactor scheduler
+/// and the daily-rollup scheduler. Both acquire the per-host mutex before
+/// mutating that host's `chunks/` directory, so they never race on the same
+/// host. Across hosts they run independently.
+type HostLocks = Arc<DashMap<Uuid, Arc<std::sync::Mutex<()>>>>;
+
+fn host_lock(locks: &HostLocks, uuid: Uuid) -> Arc<std::sync::Mutex<()>> {
+    locks
+        .entry(uuid)
+        .or_insert_with(|| Arc::new(std::sync::Mutex::new(())))
+        .clone()
+}
 
 mod assets;
 
@@ -143,6 +158,10 @@ pub async fn run(cfg: Config) -> Result<()> {
     }
     tokio::spawn(haze_auth::sessions::run_cleanup_task(pool.clone()));
 
+    // Per-host mutex shared between the downsampling compactor and the
+    // single-threaded daily-rollup task so they never race on the same host.
+    let host_locks: HostLocks = Arc::new(DashMap::new());
+
     // Compactor: walk every host on a settings-driven cadence, aggregating
     // chunks per the current retention tiers. Both the cadence and the tiers
     // are re-read every few seconds so changes from the settings UI apply
@@ -153,6 +172,7 @@ pub async fn run(cfg: Config) -> Result<()> {
         let pool = pool.clone();
         let data_dir = cfg.data_dir.clone();
         let hzc = hzc.clone();
+        let host_locks = host_locks.clone();
         let compactor_parallel = worker_pools.compactor.max(1) as usize;
         tokio::spawn(async move {
             // How often we re-evaluate "has enough time passed since the
@@ -195,7 +215,12 @@ pub async fn run(cfg: Config) -> Result<()> {
                     let permit = semaphore.clone().acquire_owned().await.unwrap();
                     let data_dir = data_dir.clone();
                     let tiers = tiers.clone();
+                    let host_lock_ref = host_lock(&host_locks, uuid);
                     handles.push(tokio::task::spawn_blocking(move || {
+                        // Serialize against the rollup task on the same host.
+                        let _g = host_lock_ref
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
                         let result = compactor::compact_host(&data_dir, uuid, &tiers, now);
                         drop(permit);
                         (uuid, result)
@@ -241,6 +266,133 @@ pub async fn run(cfg: Config) -> Result<()> {
         });
     }
 
+    // Daily-rollup task: single-threaded, walks every host sequentially on a
+    // settings-driven cadence (default 10 min), bundles every per-window
+    // chunk for a fully-settled UTC day into one zstd file, then deletes
+    // the sources. Settle margin (default 1 h past UTC midnight) and the
+    // inter-host pause are re-read live so changes from the settings UI
+    // apply without a restart. Serializes per-host against the parallel
+    // downsampling compactor via `host_locks`.
+    {
+        let pool = pool.clone();
+        let data_dir = cfg.data_dir.clone();
+        let hzc = hzc.clone();
+        let host_locks = host_locks.clone();
+        tokio::spawn(async move {
+            let poll_tick = Duration::from_secs(5);
+            let mut last_run = tokio::time::Instant::now();
+            loop {
+                tokio::time::sleep(poll_tick).await;
+                let interval = settings::rollup_interval_secs(&pool)
+                    .await
+                    .unwrap_or(settings::DEFAULT_ROLLUP_INTERVAL_SECS);
+                if last_run.elapsed() < Duration::from_secs(u64::from(interval)) {
+                    continue;
+                }
+                last_run = tokio::time::Instant::now();
+
+                let settled_after = settings::rollup_settled_after_secs(&pool)
+                    .await
+                    .unwrap_or(settings::DEFAULT_ROLLUP_SETTLED_AFTER_SECS);
+                let pause_ms = settings::rollup_inter_host_pause_ms(&pool)
+                    .await
+                    .unwrap_or(settings::DEFAULT_ROLLUP_INTER_HOST_PAUSE_MS);
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_secs() as i64);
+                let hosts = hzc.list_hosts().unwrap_or_default();
+                let host_count = hosts.len();
+                let run_started = std::time::Instant::now();
+                tracing::info!(host_count, "rollup pass started");
+
+                let data_dir_inner = data_dir.clone();
+                let host_locks_inner = host_locks.clone();
+                let join = tokio::task::spawn_blocking(move || {
+                    let mut totals = (0usize, 0usize, 0usize, 0usize, 0u64, 0u64, 0usize);
+                    // (bundled_days, source_chunks, migrated, quarantined,
+                    //  bytes_before, bytes_after, failed_hosts)
+                    let settled_after_i64 = i64::from(settled_after);
+                    let pause = std::time::Duration::from_millis(u64::from(pause_ms));
+                    for uuid in hosts {
+                        let lock = host_lock(&host_locks_inner, uuid);
+                        let guard = lock
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let host_started = std::time::Instant::now();
+                        match haze_store::rollup_host(&data_dir_inner, uuid, now, settled_after_i64)
+                        {
+                            Ok((migration, rollup)) => {
+                                totals.0 += rollup.bundled_days;
+                                totals.1 += rollup.source_chunks_consumed;
+                                totals.2 += migration.renamed;
+                                totals.3 += migration.quarantined;
+                                totals.4 += rollup.bytes_before;
+                                totals.5 += rollup.bytes_after;
+                                if rollup.did_work() || migration.touched_anything() {
+                                    tracing::info!(
+                                        %uuid,
+                                        bundled_days = rollup.bundled_days,
+                                        source_chunks = rollup.source_chunks_consumed,
+                                        migrated = migration.renamed,
+                                        quarantined = migration.quarantined,
+                                        tmp_removed = migration.tmp_removed,
+                                        elapsed_ms = host_started.elapsed().as_millis() as u64,
+                                        "rollup host done"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                totals.6 += 1;
+                                tracing::warn!(%uuid, error = ?e, "rollup host failed");
+                            }
+                        }
+                        drop(guard);
+                        if !pause.is_zero() {
+                            std::thread::sleep(pause);
+                        }
+                    }
+                    totals
+                });
+
+                match join.await {
+                    Ok((
+                        bundled_days,
+                        source_chunks,
+                        migrated,
+                        quarantined,
+                        bytes_before,
+                        bytes_after,
+                        failed_hosts,
+                    )) => {
+                        let elapsed_ms = run_started.elapsed().as_millis() as u64;
+                        if elapsed_ms > u64::from(interval) * 1_000 {
+                            tracing::warn!(
+                                elapsed_ms,
+                                interval_secs = interval,
+                                "rollup pass overran interval"
+                            );
+                        }
+                        tracing::info!(
+                            host_count,
+                            bundled_days,
+                            source_chunks,
+                            migrated,
+                            quarantined,
+                            bytes_before,
+                            bytes_after,
+                            failed_hosts,
+                            elapsed_ms,
+                            "rollup pass complete"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!(error = ?e, "rollup task join failed");
+                    }
+                }
+            }
+        });
+    }
+
     // Alert engine - single tokio task polling every minute. Rule
     // evaluations fan out across `alert_eval` workers and read every
     // sample from the in-memory series store. Persisting the in-memory
@@ -279,6 +431,14 @@ pub async fn run(cfg: Config) -> Result<()> {
     // and let axum's graceful shutdown drain. Without this, an open
     // browser EventSource pins the server alive until the kill timeout.
     let shutdown = Arc::new(tokio::sync::Notify::new());
+    // Anonymous-traffic rate limiter, sized from the stored public-mode
+    // settings (defaults if missing). Hot-swapped when an admin saves
+    // new limits via /api/v1/settings/public.
+    let public_settings = settings::public_mode_settings(&pool)
+        .await
+        .unwrap_or_else(|_| haze_store::default_public_mode_settings());
+    let limiters = haze_api::new_handle(&public_settings);
+    let sse_per_ip = haze_api::new_sse_map();
     let app = build_app(
         haze_api::AppState {
             pool,
@@ -290,6 +450,8 @@ pub async fn run(cfg: Config) -> Result<()> {
             events: events_tx,
             shutdown: shutdown.clone(),
             cookie_path: base_url.clone(),
+            limiters,
+            sse_per_ip,
         },
         &base_url,
     );
@@ -300,10 +462,16 @@ pub async fn run(cfg: Config) -> Result<()> {
         .with_context(|| format!("binding {addr}"))?;
     tracing::info!(%addr, "listening");
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal(shutdown))
-        .await
-        .context("axum serve failed")
+    // ConnectInfo<SocketAddr> is what the rate-limit middleware reads for
+    // the per-IP key, so the listener must be served with connect-info
+    // propagation (not the plain `into_make_service()` default).
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal(shutdown))
+    .await
+    .context("axum serve failed")
 }
 
 fn build_app(state: haze_api::AppState, base: &str) -> axum::Router {

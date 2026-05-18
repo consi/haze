@@ -83,9 +83,13 @@ fn serve(path: &str, base: &str) -> Option<Response> {
         .ok()?;
 
     let cache_value = if path == "index.html" {
-        // index.html is the SPA shell; its hash-named asset links can change
-        // on every deploy, so it must never be cached.
-        HeaderValue::from_static("no-cache")
+        // index.html is the SPA shell. `no-store` is intentionally stronger
+        // than `no-cache`: it prevents the browser disk/memory cache AND
+        // the back-forward cache from serving an old shell, which would
+        // otherwise pin clients to stale hashed-bundle URLs and stale
+        // client-routing logic across deploys. Pragma+Expires are belt-
+        // and-braces for misbehaving proxies that ignore Cache-Control.
+        HeaderValue::from_static("no-store, no-cache, must-revalidate, max-age=0")
     } else {
         // All other emitted assets are content-hashed by Vite, so they're
         // safe to cache aggressively.
@@ -93,6 +97,12 @@ fn serve(path: &str, base: &str) -> Option<Response> {
     };
     resp.headers_mut()
         .insert(header::CACHE_CONTROL, cache_value);
+    if path == "index.html" {
+        resp.headers_mut()
+            .insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+        resp.headers_mut()
+            .insert(header::EXPIRES, HeaderValue::from_static("0"));
+    }
     Some(resp)
 }
 

@@ -148,6 +148,8 @@ chrono = { version = "0.4", default-features = false, features = ["serde", "cloc
 dashmap = "6"
 bytes = "1"
 zstd = "0.13"
+governor = "0.7"
+arc-swap = "1"
 
 
 # Dev-only

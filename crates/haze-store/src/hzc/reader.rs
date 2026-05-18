@@ -22,6 +22,12 @@ use super::{
 use crate::slot::{Sample, Slot};
 use uuid::Uuid;
 
+/// How many times to retry a range read if a chunk disappears between
+/// `list_chunks` and `fs::read`. Each retry re-lists, re-filters, and starts
+/// over — a higher-generation bundle published mid-read will be preferred on
+/// the next pass.
+const READ_RETRY_LIMIT: u32 = 3;
+
 /// List every chunk in `host_dir/chunks/`. Returns chunk refs sorted by
 /// `(resolution_secs ascending, start_ts ascending)`.
 pub fn list_chunks(host_dir: &Path) -> Result<Vec<ChunkRef>, HzcError> {
@@ -50,9 +56,13 @@ pub fn list_chunks(host_dir: &Path) -> Result<Vec<ChunkRef>, HzcError> {
 ///
 /// 1. Collect all chunks that overlap the query range.
 /// 2. For each disjoint sub-range, prefer the finest resolution available.
-/// 3. Decode + filter + concatenate.
+/// 3. Within the same resolution, prefer the highest generation (daily
+///    bundles supersede the per-window chunks they were built from).
+/// 4. Decode + filter + concatenate.
 ///
-/// Returns timestamped samples sorted by `ts`.
+/// Returns timestamped samples sorted by `ts`. If the compactor publishes a
+/// new bundle and deletes its source chunks mid-read, the call is retried up
+/// to [`READ_RETRY_LIMIT`] times.
 pub fn read_range(
     data_dir: &Path,
     host_uuid: Uuid,
@@ -65,32 +75,40 @@ pub fn read_range(
 
 /// Same as [`read_range`] but takes a host directory directly (handy for tests).
 pub fn read_range_in_dir(host_dir: &Path, from: i64, to: i64) -> Result<Vec<Sample>, HzcError> {
-    let chunks = list_chunks(host_dir)?;
-    let chunk_seqs: HashSet<u64> = chunks.iter().map(|c| c.seq).collect();
+    let mut attempts: u32 = 0;
+    loop {
+        match try_read_range(host_dir, from, to) {
+            Ok(samples) => return Ok(samples),
+            Err(HzcError::Io(e))
+                if e.kind() == std::io::ErrorKind::NotFound && attempts < READ_RETRY_LIMIT =>
+            {
+                attempts += 1;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
 
-    // Filter sealed chunks down to those overlapping the range, then keep only
-    // the finest resolution where multiple chunks cover the same span.
-    let mut overlapping: Vec<ChunkRef> = chunks
+fn try_read_range(host_dir: &Path, from: i64, to: i64) -> Result<Vec<Sample>, HzcError> {
+    let chunks = list_chunks(host_dir)?;
+    // Only `g0` (per-window) chunks represent a sealed WAL — bundles take a
+    // fresh seq from a separate namespace, so a bundle's seq matching a live
+    // WAL's seq does NOT mean the WAL is redundant. Skipping it would silently
+    // drop the live writer's open chunk.
+    let chunk_seqs: HashSet<u64> = chunks
+        .iter()
+        .filter(|c| c.generation == 0)
+        .map(|c| c.seq)
+        .collect();
+
+    // Filter sealed chunks down to those overlapping the range, then keep
+    // only the finest resolution where multiple chunks cover the same span,
+    // and within the same resolution, only the highest generation.
+    let overlapping: Vec<ChunkRef> = chunks
         .into_iter()
         .filter(|c| c.overlaps(from, to))
         .collect();
-    overlapping.sort_by(|a, b| {
-        a.start_ts
-            .cmp(&b.start_ts)
-            .then(a.resolution_secs.cmp(&b.resolution_secs))
-    });
-    let mut chosen: Vec<ChunkRef> = Vec::with_capacity(overlapping.len());
-    'outer: for c in overlapping {
-        for existing in &chosen {
-            if existing.start_ts <= c.start_ts
-                && existing.end_ts >= c.end_ts
-                && existing.resolution_secs < c.resolution_secs
-            {
-                continue 'outer;
-            }
-        }
-        chosen.push(c);
-    }
+    let chosen = filter_by_coverage_preferences(overlapping);
 
     let mut out: Vec<Sample> = Vec::new();
     for cr in chosen {
@@ -131,6 +149,49 @@ pub fn read_range_in_dir(host_dir: &Path, from: i64, to: i64) -> Result<Vec<Samp
     Ok(out)
 }
 
+/// Drop chunks that are fully covered by a better-preferred chunk. Run twice:
+/// once preferring finer resolution, then preferring higher generation among
+/// equal-resolution chunks. The two predicates compose because each is
+/// strictly asymmetric — equal-preference chunks are never dropped against
+/// each other.
+fn filter_by_coverage_preferences(chunks: Vec<ChunkRef>) -> Vec<ChunkRef> {
+    let after_resolution = filter_by_coverage(chunks, |a, b| a.resolution_secs < b.resolution_secs);
+    filter_by_coverage(after_resolution, |a, b| {
+        a.resolution_secs == b.resolution_secs && a.generation > b.generation
+    })
+}
+
+/// Generic span-coverage filter. Drops `c` whenever there's some `other` such
+/// that `other` fully contains `c`'s `[start_ts, end_ts)` and `prefers(other,
+/// c)` returns true. `prefers` must be strictly asymmetric so this can't
+/// mutually eliminate two chunks.
+fn filter_by_coverage<F>(chunks: Vec<ChunkRef>, prefers: F) -> Vec<ChunkRef>
+where
+    F: Fn(&ChunkRef, &ChunkRef) -> bool,
+{
+    let n = chunks.len();
+    if n < 2 {
+        return chunks;
+    }
+    let mut keep = vec![true; n];
+    for (i, c) in chunks.iter().enumerate() {
+        for (j, other) in chunks.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+            if other.start_ts <= c.start_ts && other.end_ts >= c.end_ts && prefers(other, c) {
+                keep[i] = false;
+                break;
+            }
+        }
+    }
+    chunks
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, c)| keep[i].then_some(c))
+        .collect()
+}
+
 /// WAL files for chunks not yet sealed. A `<seq>.wal` whose seq already
 /// appears in `chunks/` is an orphan from a crashed seal (the recovery path
 /// in [`HostWriter::open`] cleans these up next time the host is opened) -
@@ -160,12 +221,32 @@ fn list_live_wals(host_dir: &Path, chunk_seqs: &HashSet<u64>) -> Result<Vec<Path
     Ok(out)
 }
 
-/// Convenience: dump every sample in `host_dir` regardless of range. Mostly
-/// useful for the compactor + tests.
+/// Dump every sample in `host_dir` regardless of range.
+///
+/// Mostly useful for the compactor + tests. Applies the same
+/// coverage-preference filter as [`read_range_in_dir`] so a brief overlap
+/// between a daily bundle (g1) and its source chunks (g0) doesn't surface as
+/// duplicates.
 pub fn read_all(host_dir: &Path) -> Result<Vec<(i64, Slot)>, HzcError> {
+    let mut attempts: u32 = 0;
+    loop {
+        match try_read_all(host_dir) {
+            Ok(samples) => return Ok(samples),
+            Err(HzcError::Io(e))
+                if e.kind() == std::io::ErrorKind::NotFound && attempts < READ_RETRY_LIMIT =>
+            {
+                attempts += 1;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+
+fn try_read_all(host_dir: &Path) -> Result<Vec<(i64, Slot)>, HzcError> {
     let chunks = list_chunks(host_dir)?;
+    let chosen = filter_by_coverage_preferences(chunks);
     let mut out: Vec<(i64, Slot)> = Vec::new();
-    for cr in chunks {
+    for cr in chosen {
         let bytes = fs::read(&cr.path)?;
         out.extend(decode_chunk(&bytes)?);
     }
@@ -248,5 +329,60 @@ mod tests {
         assert_eq!(s.len(), 20);
         assert_eq!(s.first().unwrap().timestamp_secs, 50);
         assert_eq!(s.last().unwrap().timestamp_secs, 69);
+    }
+
+    fn cref(start: i64, end: i64, res: u32, generation: u8, seq: u64) -> ChunkRef {
+        ChunkRef {
+            seq,
+            resolution_secs: res,
+            generation,
+            start_ts: start,
+            end_ts: end,
+            path: PathBuf::from(format!("/fake/{seq}")),
+        }
+    }
+
+    #[test]
+    fn coverage_filter_prefers_higher_generation() {
+        // Three per-window chunks plus one daily bundle covering the same span.
+        let chunks = vec![
+            cref(0, 60, 0, 0, 1),
+            cref(60, 120, 0, 0, 2),
+            cref(120, 180, 0, 0, 3),
+            cref(0, 180, 0, 1, 100), // bundle: same resolution, higher generation
+        ];
+        let kept = filter_by_coverage_preferences(chunks);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].seq, 100);
+        assert_eq!(kept[0].generation, 1);
+    }
+
+    #[test]
+    fn coverage_filter_keeps_partial_bundle_and_uncovered_chunks() {
+        // Bundle covers [0, 120); a g0 chunk at [120, 180) is outside.
+        let chunks = vec![
+            cref(0, 60, 0, 0, 1),
+            cref(60, 120, 0, 0, 2),
+            cref(120, 180, 0, 0, 3),
+            cref(0, 120, 0, 1, 100), // bundle for first two windows
+        ];
+        let kept = filter_by_coverage_preferences(chunks);
+        let mut seqs: Vec<u64> = kept.iter().map(|c| c.seq).collect();
+        seqs.sort_unstable();
+        assert_eq!(seqs, vec![3, 100]);
+    }
+
+    #[test]
+    fn coverage_filter_prefers_finer_resolution_over_generation() {
+        // A finer-resolution chunk should beat a coarser higher-generation one
+        // when they cover the same span. (The two passes are independent —
+        // resolution wins first, generation tiebreaks within a resolution.)
+        let chunks = vec![
+            cref(0, 86_400, 0, 0, 1),     // raw daily span
+            cref(0, 86_400, 300, 1, 100), // coarser daily bundle
+        ];
+        let kept = filter_by_coverage_preferences(chunks);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].resolution_secs, 0);
     }
 }

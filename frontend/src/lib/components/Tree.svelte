@@ -142,16 +142,17 @@
 {/snippet}
 
 {#snippet editPencil(onClick: () => void, label: string)}
-  <!-- Hidden until the cursor enters the parent row (which carries the
-       `group` Tailwind marker). On hover, snaps to 60 % muted; pencil's
-       own hover bumps to 100 % so the user gets a "ready to click" cue. -->
+  <!-- Hover-revealed on desktop (the `group` marker on the row), always
+       visible on mobile where there's no hover. The desktop variant
+       lands at 60 % muted; the pencil's own hover/focus bumps to 100 %
+       so the user gets a "ready to click" cue. -->
   <button
     type="button"
     onclick={(e) => {
       e.stopPropagation();
       onClick();
     }}
-    class="opacity-0 group-hover:opacity-60 hover:!opacity-100 focus:!opacity-100"
+    class="opacity-60 md:opacity-0 md:group-hover:opacity-60 hover:!opacity-100 focus:!opacity-100"
     style="color: var(--muted); padding: 2px"
     aria-label={label}
     title={label}
@@ -162,7 +163,7 @@
 
 {#snippet hostRow(host: Host, paddingRem: number)}
   <div
-    class="group w-full flex items-center gap-2 px-2 py-0.5 hover:bg-white/5"
+    class="group w-full flex items-center gap-2 px-2 py-1.5 md:py-0.5 hover:bg-white/5"
     style="padding-left: {paddingRem}rem; {isActiveHost(host.uuid)
       ? 'background: rgba(78, 161, 255, 0.12);'
       : ''}"
@@ -188,7 +189,7 @@
   {@const hasChildren = node.children.length > 0 || node.hosts.length > 0}
   <div>
     <div
-      class="group w-full flex items-center gap-1 px-1.5 py-0.5 hover:bg-white/5"
+      class="group w-full flex items-center gap-1 px-1.5 py-1.5 md:py-0.5 hover:bg-white/5"
       style="padding-left: {0.375 + depth * 0.75}rem; {isActiveGroup(node.group.uuid)
         ? 'background: rgba(78, 161, 255, 0.12);'
         : ''}"

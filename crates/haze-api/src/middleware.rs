@@ -1,10 +1,13 @@
 //! Session middleware: extracts either the `haze_session` cookie or a
 //! `Authorization: Bearer hzt_…` API-token header, looks the principal up via
 //! `haze-auth`, and attaches `CurrentUser` to the request extensions.
+//!
+//! Also exposes the `ViewerAccess` extractor for read endpoints that
+//! should be accessible anonymously when public mode is enabled.
 
 use axum::{
-    extract::{Request, State},
-    http::header,
+    extract::{FromRequestParts, Request, State},
+    http::{header, request::Parts},
     middleware::Next,
     response::Response,
 };
@@ -13,8 +16,9 @@ use haze_auth::{
     sessions::{self, COOKIE_NAME},
     user::{self, Role},
 };
+use haze_store::repo::settings;
 
-use crate::state::AppState;
+use crate::{error::ApiError, state::AppState};
 
 pub async fn session_layer(
     State(state): State<AppState>,
@@ -81,4 +85,32 @@ fn extract_cookie(header_value: &str, name: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Extractor for read endpoints that should also work without
+/// authentication when public mode is enabled.
+///
+/// Succeeds with `Some(user)` for authenticated requests, with `None` for
+/// anonymous requests *if and only if* public mode is on, and rejects with
+/// 401 otherwise. Handlers that don't care which case applies can simply
+/// take `_viewer: ViewerAccess` as a gate.
+#[derive(Debug, Clone)]
+pub struct ViewerAccess {
+    pub user: Option<CurrentUser>,
+}
+
+impl FromRequestParts<AppState> for ViewerAccess {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, ApiError> {
+        if let Some(user) = parts.extensions.get::<CurrentUser>().cloned() {
+            return Ok(Self { user: Some(user) });
+        }
+        let public = settings::public_mode_settings(&state.pool).await?;
+        if public.enabled {
+            Ok(Self { user: None })
+        } else {
+            Err(ApiError::Unauthorized)
+        }
+    }
 }

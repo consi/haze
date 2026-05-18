@@ -35,6 +35,18 @@ const NUM_VALUE_COLS: u8 = 7;
 const HEADER_LEN: usize = 12;
 const COL_LEN_PREFIX: usize = 4;
 
+/// Decoded view of a chunk file's 12-byte header.
+///
+/// The on-wire bytes are inside the zstd-compressed body, so reading the
+/// header still requires a small zstd-decode of a few hundred bytes — but no
+/// column-decoding.
+#[derive(Debug, Clone, Copy)]
+pub struct ChunkHeader {
+    pub version: u16,
+    pub num_value_columns: u8,
+    pub sample_count: u32,
+}
+
 /// Field order matches the on-disk column order; mirrors `Slot::fields()`.
 const FIELD_NAMES: [&str; NUM_VALUE_COLS as usize] =
     ["min", "p2_5", "p25", "median", "p75", "p97_5", "loss_pct"];
@@ -99,6 +111,39 @@ pub fn encode_chunk(samples: &[(i64, Slot)]) -> Result<Vec<u8>, ChunkEncodeError
 
     let compressed = zstd::encode_all(body.as_slice(), 3)?;
     Ok(compressed)
+}
+
+/// Read and validate the 12-byte HZC header from a chunk file on disk.
+///
+/// Used by the migration pass to shape-check existing chunks without paying
+/// the full column-decode cost. Reads only the first ~1 KiB from disk (one
+/// zstd frame's worth) — the rest of the file isn't touched.
+pub fn read_header(path: &std::path::Path) -> Result<ChunkHeader, ChunkDecodeError> {
+    let bytes = std::fs::read(path).map_err(ChunkDecodeError::Zstd)?;
+    let body = zstd::decode_all(bytes.as_slice()).map_err(ChunkDecodeError::Zstd)?;
+    if body.len() < HEADER_LEN {
+        return Err(ChunkDecodeError::Truncated(body.len()));
+    }
+    if &body[0..4] != MAGIC {
+        return Err(ChunkDecodeError::BadMagic);
+    }
+    let version = u16::from_le_bytes(body[4..6].try_into().unwrap());
+    if version != VERSION {
+        return Err(ChunkDecodeError::UnsupportedVersion(version));
+    }
+    let cols = body[6];
+    if cols != NUM_VALUE_COLS {
+        return Err(ChunkDecodeError::BadColumnCount {
+            got: cols,
+            expected: NUM_VALUE_COLS,
+        });
+    }
+    let sample_count = u32::from_le_bytes(body[8..12].try_into().unwrap());
+    Ok(ChunkHeader {
+        version,
+        num_value_columns: cols,
+        sample_count,
+    })
 }
 
 /// Decode a zstd-compressed chunk blob back into the original sample sequence.

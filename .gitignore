@@ -35,3 +35,4 @@
 *.log
 core.*
 Thumbs.db
+/.cargo-docker/

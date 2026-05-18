@@ -19,9 +19,14 @@ pub mod store;
 pub mod wal;
 pub mod writer;
 
-pub use chunk::{ChunkDecodeError, ChunkEncodeError, decode_chunk, encode_chunk};
-pub use compactor::{CompactReport, compact_host};
-pub use format::{ChunkRef, FilenameError, chunk_filename, parse_chunk_filename};
+pub use chunk::{ChunkDecodeError, ChunkEncodeError, ChunkHeader, decode_chunk, encode_chunk};
+pub use compactor::{
+    CompactReport, DEFAULT_ROLLUP_SETTLED_AFTER_SECS, MigrationReport, RollupReport, compact_host,
+    rollup_host,
+};
+pub use format::{
+    ChunkRef, FilenameError, chunk_filename, is_legacy_chunk_name, parse_chunk_filename,
+};
 pub use reader::{list_chunks, read_all, read_range, read_range_in_dir};
 pub use store::HzcStore;
 pub use writer::{

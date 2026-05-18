@@ -18,12 +18,14 @@ pub mod slot;
 
 pub use aggregate::{Observation, aggregate, consolidate};
 pub use hzc::{
-    HostWriter, HzcError, HzcStore, RetentionTier, chunk_window_bounds, default_retention_tiers,
-    host_directory, read_range, read_range_in_dir,
+    DEFAULT_ROLLUP_SETTLED_AFTER_SECS, HostWriter, HzcError, HzcStore, MigrationReport,
+    RetentionTier, RollupReport, chunk_window_bounds, default_retention_tiers, host_directory,
+    read_range, read_range_in_dir, rollup_host,
 };
 pub use repo::settings::{
-    AlertingSettings, DEFAULT_HOST_CHUNK_WINDOW_SECS, HostDefaults, WorkerPools,
-    default_alerting_settings, default_host_defaults, default_worker_pools,
+    AlertingSettings, DEFAULT_HOST_CHUNK_WINDOW_SECS, HostDefaults, PublicModeSettings,
+    WorkerPools, default_alerting_settings, default_host_defaults, default_public_mode_settings,
+    default_worker_pools,
 };
 pub use series_store::SeriesStore;
 pub use slot::{Sample, Slot};

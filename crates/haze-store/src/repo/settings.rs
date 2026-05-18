@@ -18,13 +18,31 @@ pub enum SettingsError {
 
 pub const KEY_RETENTION_TIERS: &str = "hzc.retention_tiers";
 pub const KEY_COMPACTOR_INTERVAL_SECS: &str = "hzc.compactor_interval_secs";
+pub const KEY_ROLLUP_INTERVAL_SECS: &str = "hzc.rollup_interval_secs";
+pub const KEY_ROLLUP_SETTLED_AFTER_SECS: &str = "hzc.rollup_settled_after_secs";
+pub const KEY_ROLLUP_INTER_HOST_PAUSE_MS: &str = "hzc.rollup_inter_host_pause_ms";
 pub const KEY_WORKER_POOLS: &str = "runtime.worker_pools";
 pub const KEY_ALERTING: &str = "alerting";
 pub const KEY_HOST_DEFAULTS: &str = "hosts.defaults";
+pub const KEY_PUBLIC_MODE: &str = "public_mode";
 
 /// How often the compactor walks the host fleet. Read live by the
 /// compactor task each cycle so changes apply without a restart.
 pub const DEFAULT_COMPACTOR_INTERVAL_SECS: u32 = 3600;
+
+/// How often the single-threaded daily-rollup task walks the host fleet.
+/// 10 minutes balances responsiveness (a freshly-settled day gets bundled
+/// quickly) against I/O pressure on the live writer.
+pub const DEFAULT_ROLLUP_INTERVAL_SECS: u32 = 600;
+
+/// Settle margin before a UTC day is eligible for bundling: 1 hour past
+/// midnight UTC. Long enough to let any chunk that crossed midnight finish
+/// sealing.
+pub const DEFAULT_ROLLUP_SETTLED_AFTER_SECS: u32 = 3_600;
+
+/// Pause between hosts inside a single rollup pass. Gives the kernel
+/// breathing room for the writer's WAL flushes and other I/O on the box.
+pub const DEFAULT_ROLLUP_INTER_HOST_PAUSE_MS: u32 = 50;
 
 /// Default chunk window for newly-created hosts.
 ///
@@ -141,6 +159,74 @@ pub async fn set_compactor_interval_secs(
     .await
 }
 
+/// How often (in seconds) the single-threaded rollup task walks the host
+/// fleet. Falls back to the default if missing or malformed.
+pub async fn rollup_interval_secs(pool: &SqlitePool) -> Result<u32, SettingsError> {
+    let raw = get_raw(pool, KEY_ROLLUP_INTERVAL_SECS).await?;
+    Ok(raw
+        .and_then(|v| serde_json::from_str::<u32>(v.trim()).ok())
+        .unwrap_or(DEFAULT_ROLLUP_INTERVAL_SECS))
+}
+
+pub async fn set_rollup_interval_secs(
+    pool: &SqlitePool,
+    value: u32,
+    updated_by: Option<i64>,
+) -> Result<(), SettingsError> {
+    set_raw(
+        pool,
+        KEY_ROLLUP_INTERVAL_SECS,
+        &value.to_string(),
+        updated_by,
+    )
+    .await
+}
+
+/// Settle margin (seconds past the UTC day boundary) before a day's chunks
+/// are eligible for bundling.
+pub async fn rollup_settled_after_secs(pool: &SqlitePool) -> Result<u32, SettingsError> {
+    let raw = get_raw(pool, KEY_ROLLUP_SETTLED_AFTER_SECS).await?;
+    Ok(raw
+        .and_then(|v| serde_json::from_str::<u32>(v.trim()).ok())
+        .unwrap_or(DEFAULT_ROLLUP_SETTLED_AFTER_SECS))
+}
+
+pub async fn set_rollup_settled_after_secs(
+    pool: &SqlitePool,
+    value: u32,
+    updated_by: Option<i64>,
+) -> Result<(), SettingsError> {
+    set_raw(
+        pool,
+        KEY_ROLLUP_SETTLED_AFTER_SECS,
+        &value.to_string(),
+        updated_by,
+    )
+    .await
+}
+
+/// Pause (milliseconds) the rollup loop sleeps between consecutive hosts.
+pub async fn rollup_inter_host_pause_ms(pool: &SqlitePool) -> Result<u32, SettingsError> {
+    let raw = get_raw(pool, KEY_ROLLUP_INTER_HOST_PAUSE_MS).await?;
+    Ok(raw
+        .and_then(|v| serde_json::from_str::<u32>(v.trim()).ok())
+        .unwrap_or(DEFAULT_ROLLUP_INTER_HOST_PAUSE_MS))
+}
+
+pub async fn set_rollup_inter_host_pause_ms(
+    pool: &SqlitePool,
+    value: u32,
+    updated_by: Option<i64>,
+) -> Result<(), SettingsError> {
+    set_raw(
+        pool,
+        KEY_ROLLUP_INTER_HOST_PAUSE_MS,
+        &value.to_string(),
+        updated_by,
+    )
+    .await
+}
+
 pub async fn set_retention_tiers(
     pool: &SqlitePool,
     tiers: &[RetentionTier],
@@ -247,4 +333,57 @@ pub async fn set_host_defaults(
 ) -> Result<(), SettingsError> {
     let json = serde_json::to_string(defaults)?;
     set_raw(pool, KEY_HOST_DEFAULTS, &json, updated_by).await
+}
+
+/// Public-mode + anonymous rate-limit configuration.
+///
+/// When `enabled`, anonymous browsers can view the tree, group/host
+/// details, and host series via `/api/v1/{tree,groups,hosts,events}`.
+/// Write endpoints are unaffected — they still demand an authenticated
+/// `CurrentUser`. The per-IP token-bucket sizes throttle anonymous
+/// traffic only; authenticated requests bypass the limiter entirely.
+///
+/// Two limiter classes:
+/// - `light` covers cheap calls (server-info, tree, groups, hosts list/detail).
+/// - `series` covers `/hosts/{uuid}/series`, which a viewer can hit many
+///   times in succession while paging through hosts.
+///
+/// `sse_max_per_ip` caps simultaneous SSE connections from one IP so an
+/// attacker can't pin thousands of broadcast subscribers open.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, utoipa::ToSchema)]
+pub struct PublicModeSettings {
+    pub enabled: bool,
+    pub light_per_minute: u32,
+    pub light_burst: u32,
+    pub series_per_minute: u32,
+    pub series_burst: u32,
+    pub sse_max_per_ip: u32,
+}
+
+pub fn default_public_mode_settings() -> PublicModeSettings {
+    PublicModeSettings {
+        enabled: false,
+        light_per_minute: 300,
+        light_burst: 60,
+        series_per_minute: 1200,
+        series_burst: 120,
+        sse_max_per_ip: 4,
+    }
+}
+
+pub async fn public_mode_settings(pool: &SqlitePool) -> Result<PublicModeSettings, SettingsError> {
+    let raw = get_raw(pool, KEY_PUBLIC_MODE).await?;
+    match raw {
+        Some(v) => Ok(serde_json::from_str(&v).unwrap_or_else(|_| default_public_mode_settings())),
+        None => Ok(default_public_mode_settings()),
+    }
+}
+
+pub async fn set_public_mode_settings(
+    pool: &SqlitePool,
+    settings: &PublicModeSettings,
+    updated_by: Option<i64>,
+) -> Result<(), SettingsError> {
+    let json = serde_json::to_string(settings)?;
+    set_raw(pool, KEY_PUBLIC_MODE, &json, updated_by).await
 }

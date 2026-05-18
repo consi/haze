@@ -31,3 +31,6 @@ chrono = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 tower = { workspace = true }
+governor = { workspace = true }
+arc-swap = { workspace = true }
+dashmap = { workspace = true }

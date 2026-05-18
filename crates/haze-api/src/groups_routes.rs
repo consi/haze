@@ -13,7 +13,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{ChangeKind, error::ApiError, error::ApiResult, state::AppState};
+use crate::{
+    ChangeKind, error::ApiError, error::ApiResult, middleware::ViewerAccess, state::AppState,
+};
 
 /// Maximum depth a group is allowed to live at (0 = root). Capped to keep
 /// breadcrumbs readable and the materialized path columns bounded.
@@ -59,7 +61,7 @@ pub(crate) fn build_parent_map(rows: &[Group]) -> std::collections::HashMap<i64,
     tag = "groups"
 )]
 pub(crate) async fn list(
-    _user: CurrentUser,
+    _viewer: ViewerAccess,
     State(state): State<AppState>,
 ) -> ApiResult<Json<Vec<GroupResp>>> {
     let rows = groups::list_all(&state.pool).await?;
@@ -80,7 +82,7 @@ pub(crate) async fn list(
     tag = "groups"
 )]
 pub(crate) async fn get_one(
-    _user: CurrentUser,
+    _viewer: ViewerAccess,
     State(state): State<AppState>,
     Path(uuid): Path<Uuid>,
 ) -> ApiResult<Json<GroupResp>> {

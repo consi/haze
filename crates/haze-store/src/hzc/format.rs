@@ -1,18 +1,24 @@
 //! Chunk filename scheme - the filesystem is the index.
 //!
 //! Filenames encode everything a reader needs to range-filter without opening
-//! the file: monotonic sequence number, resolution (0 = raw), and the
-//! `[start, end)` window in epoch seconds. A `readdir` of a host's
-//! `chunks/` directory plus `parse_chunk_filename` on each entry is enough to
-//! answer "which chunks overlap `[from, to)` at resolution `r`?"
+//! the file: monotonic sequence number, resolution (0 = raw), generation
+//! (0 = per-window raw, 1 = daily bundle, etc.), and the `[start, end)`
+//! window in epoch seconds. A `readdir` of a host's `chunks/` directory plus
+//! `parse_chunk_filename` on each entry is enough to answer "which chunks
+//! overlap `[from, to)` at resolution `r` / generation `g`?"
 //!
 //! Example:
 //! ```text
-//!   000123_r0_1715846400_1715850000.hzc.zst
-//!   000124_r0_1715850000_1715853600.hzc.zst
-//!   000200_r300_1715420800_1715593600.hzc.zst   ← 5-minute-aggregated
+//!   000123_r0_g0_1715846400_1715850000.hzc.zst    ← per-window raw chunk
+//!   000124_r0_g0_1715850000_1715853600.hzc.zst
+//!   000300_r0_g1_1715817600_1715904000.hzc.zst    ← one-day bundle (g1)
+//!   000200_r300_g0_1715420800_1715593600.hzc.zst  ← 5-minute-aggregated
 //! ```
 //!
+//! Legacy four-segment names without the `_g_` segment (written by haze
+//! versions before the daily-rollup feature shipped) are still accepted by
+//! the parser as `generation = 0`. The migration pass in the compactor
+//! renames them to the canonical five-segment form on its first sweep.
 //! Underscore-separated so the names are shell-friendly. The `.hzc.zst`
 //! extension makes the format obvious to anyone poking the directory with
 //! `file(1)`.
@@ -36,6 +42,11 @@ pub struct ChunkRef {
     /// Sample resolution in seconds. `0` = raw (whatever the host's probe
     /// interval is). Non-zero values are aggregated tiers.
     pub resolution_secs: u32,
+    /// Compaction generation. `0` = per-window chunk emitted by the live
+    /// writer. `1` = daily bundle produced by the rollup pass. Higher
+    /// generations cover larger spans and supersede lower ones for the same
+    /// `[start, end)` range.
+    pub generation: u8,
     pub start_ts: i64,
     /// Exclusive upper bound. `end_ts > start_ts`.
     pub end_ts: i64,
@@ -50,12 +61,21 @@ impl ChunkRef {
 }
 
 /// Construct the conventional filename for a chunk. Pure function - no I/O.
-pub fn chunk_filename(seq: u64, resolution_secs: u32, start_ts: i64, end_ts: i64) -> String {
-    format!("{seq:06}_r{resolution_secs}_{start_ts}_{end_ts}{CHUNK_EXTENSION}")
+pub fn chunk_filename(
+    seq: u64,
+    resolution_secs: u32,
+    generation: u8,
+    start_ts: i64,
+    end_ts: i64,
+) -> String {
+    format!("{seq:06}_r{resolution_secs}_g{generation}_{start_ts}_{end_ts}{CHUNK_EXTENSION}")
 }
 
 /// Parse a chunk filename produced by `chunk_filename`. Returns a `ChunkRef`
 /// without ever opening the file. The `path` is the input path verbatim.
+///
+/// Accepts both the canonical 5-segment grammar and the legacy 4-segment
+/// grammar (which is treated as `generation = 0`); see the module docstring.
 pub fn parse_chunk_filename(path: &Path) -> Result<ChunkRef, FilenameError> {
     let name = path
         .file_name()
@@ -66,22 +86,12 @@ pub fn parse_chunk_filename(path: &Path) -> Result<ChunkRef, FilenameError> {
         .strip_suffix(CHUNK_EXTENSION)
         .ok_or_else(|| FilenameError::NotAChunk(name.to_owned()))?;
 
-    let mut parts = stem.split('_');
-    let seq_s = parts
-        .next()
-        .ok_or_else(|| FilenameError::Malformed(name.to_owned()))?;
-    let res_s = parts
-        .next()
-        .ok_or_else(|| FilenameError::Malformed(name.to_owned()))?;
-    let start_s = parts
-        .next()
-        .ok_or_else(|| FilenameError::Malformed(name.to_owned()))?;
-    let end_s = parts
-        .next()
-        .ok_or_else(|| FilenameError::Malformed(name.to_owned()))?;
-    if parts.next().is_some() {
-        return Err(FilenameError::Malformed(name.to_owned()));
-    }
+    let parts: Vec<&str> = stem.split('_').collect();
+    let (seq_s, res_s, gen_opt, start_s, end_s) = match parts.as_slice() {
+        [seq, res, g, start, end] => (*seq, *res, Some(*g), *start, *end),
+        [seq, res, start, end] => (*seq, *res, None, *start, *end),
+        _ => return Err(FilenameError::Malformed(name.to_owned())),
+    };
 
     let seq: u64 = seq_s
         .parse()
@@ -91,6 +101,14 @@ pub fn parse_chunk_filename(path: &Path) -> Result<ChunkRef, FilenameError> {
         .ok_or_else(|| FilenameError::Malformed(name.to_owned()))?
         .parse()
         .map_err(|_| FilenameError::Malformed(name.to_owned()))?;
+    let generation: u8 = match gen_opt {
+        None => 0,
+        Some(g) => g
+            .strip_prefix('g')
+            .ok_or_else(|| FilenameError::Malformed(name.to_owned()))?
+            .parse()
+            .map_err(|_| FilenameError::Malformed(name.to_owned()))?,
+    };
     let start_ts: i64 = start_s
         .parse()
         .map_err(|_| FilenameError::Malformed(name.to_owned()))?;
@@ -103,10 +121,29 @@ pub fn parse_chunk_filename(path: &Path) -> Result<ChunkRef, FilenameError> {
     Ok(ChunkRef {
         seq,
         resolution_secs,
+        generation,
         start_ts,
         end_ts,
         path: path.to_path_buf(),
     })
+}
+
+/// True when `name` is a chunk filename in the legacy 4-segment grammar
+/// (no `_g_` segment). Used by the migration pass to decide whether the
+/// file needs renaming.
+pub fn is_legacy_chunk_name(name: &str) -> bool {
+    let Some(stem) = name.strip_suffix(CHUNK_EXTENSION) else {
+        return false;
+    };
+    let parts: Vec<&str> = stem.split('_').collect();
+    if parts.len() != 4 {
+        return false;
+    }
+    parts[0].parse::<u64>().is_ok()
+        && parts[1].starts_with('r')
+        && parts[1][1..].parse::<u32>().is_ok()
+        && parts[2].parse::<i64>().is_ok()
+        && parts[3].parse::<i64>().is_ok()
 }
 
 #[cfg(test)]
@@ -114,22 +151,46 @@ mod tests {
     use super::*;
 
     #[test]
-    fn round_trip() {
-        let name = chunk_filename(123, 0, 1_715_846_400, 1_715_850_000);
-        assert_eq!(name, "000123_r0_1715846400_1715850000.hzc.zst");
+    fn round_trip_g0() {
+        let name = chunk_filename(123, 0, 0, 1_715_846_400, 1_715_850_000);
+        assert_eq!(name, "000123_r0_g0_1715846400_1715850000.hzc.zst");
         let parsed = parse_chunk_filename(Path::new(&name)).unwrap();
         assert_eq!(parsed.seq, 123);
         assert_eq!(parsed.resolution_secs, 0);
+        assert_eq!(parsed.generation, 0);
         assert_eq!(parsed.start_ts, 1_715_846_400);
         assert_eq!(parsed.end_ts, 1_715_850_000);
     }
 
     #[test]
+    fn round_trip_g1_daily_bundle() {
+        let name = chunk_filename(300, 0, 1, 1_715_817_600, 1_715_904_000);
+        assert_eq!(name, "000300_r0_g1_1715817600_1715904000.hzc.zst");
+        let parsed = parse_chunk_filename(Path::new(&name)).unwrap();
+        assert_eq!(parsed.generation, 1);
+    }
+
+    #[test]
     fn aggregated_resolution() {
-        let name = chunk_filename(200, 300, 1_715_420_800, 1_715_593_600);
-        assert_eq!(name, "000200_r300_1715420800_1715593600.hzc.zst");
+        let name = chunk_filename(200, 300, 0, 1_715_420_800, 1_715_593_600);
+        assert_eq!(name, "000200_r300_g0_1715420800_1715593600.hzc.zst");
         let parsed = parse_chunk_filename(Path::new(&name)).unwrap();
         assert_eq!(parsed.resolution_secs, 300);
+        assert_eq!(parsed.generation, 0);
+    }
+
+    #[test]
+    fn legacy_four_segment_parses_as_g0() {
+        // Files written before the daily-rollup feature shipped use the
+        // older 4-segment grammar. The parser must accept them so existing
+        // deployments keep working until the migration pass renames them.
+        let parsed =
+            parse_chunk_filename(Path::new("000123_r0_1715846400_1715850000.hzc.zst")).unwrap();
+        assert_eq!(parsed.seq, 123);
+        assert_eq!(parsed.resolution_secs, 0);
+        assert_eq!(parsed.generation, 0);
+        assert_eq!(parsed.start_ts, 1_715_846_400);
+        assert_eq!(parsed.end_ts, 1_715_850_000);
     }
 
     #[test]
@@ -147,11 +208,14 @@ mod tests {
     #[test]
     fn rejects_malformed() {
         for n in [
-            "000123_0_1715846400_1715850000.hzc.zst", // missing 'r'
-            "abc_r0_1715846400_1715850000.hzc.zst",   // seq not numeric
-            "000123_r0_1715846400.hzc.zst",           // missing end
-            "000123_r0_1715846400_1715850000_extra.hzc.zst", // extra field
-            "000123_r0_1715850000_1715846400.hzc.zst", // end <= start
+            "000123_0_g0_1715846400_1715850000.hzc.zst", // missing 'r'
+            "000123_r0_x0_1715846400_1715850000.hzc.zst", // bad gen prefix
+            "000123_r0_g_1715846400_1715850000.hzc.zst", // 'g' without number
+            "abc_r0_g0_1715846400_1715850000.hzc.zst",   // seq not numeric
+            "000123_r0_g0_1715846400.hzc.zst",           // missing end
+            "000123_r0_g0_1715846400_1715850000_extra.hzc.zst", // extra field
+            "000123_r0_g0_1715850000_1715846400.hzc.zst", // end <= start
+            "000123_r0_1715850000_1715846400.hzc.zst",   // legacy with end <= start
         ] {
             assert!(
                 matches!(
@@ -164,10 +228,31 @@ mod tests {
     }
 
     #[test]
+    fn detects_legacy_names() {
+        assert!(is_legacy_chunk_name(
+            "000123_r0_1715846400_1715850000.hzc.zst"
+        ));
+        assert!(is_legacy_chunk_name(
+            "000200_r300_1715420800_1715593600.hzc.zst"
+        ));
+        assert!(!is_legacy_chunk_name(
+            "000123_r0_g0_1715846400_1715850000.hzc.zst"
+        ));
+        assert!(!is_legacy_chunk_name(
+            "000300_r0_g1_1715817600_1715904000.hzc.zst"
+        ));
+        assert!(!is_legacy_chunk_name("meta.json"));
+        assert!(!is_legacy_chunk_name(
+            "abc_r0_1715846400_1715850000.hzc.zst"
+        ));
+    }
+
+    #[test]
     fn overlap_check() {
         let c = ChunkRef {
             seq: 1,
             resolution_secs: 0,
+            generation: 0,
             start_ts: 100,
             end_ts: 200,
             path: PathBuf::from("x"),

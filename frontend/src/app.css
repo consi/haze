@@ -82,3 +82,15 @@ code,
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.45; transform: scale(0.7); }
 }
+
+/* Prevent iOS Safari's "auto-zoom on input focus" trick. The browser
+ * zooms the viewport in whenever a text input has computed font-size
+ * below 16 px, which on this UI (most inputs are 11-13 px) means almost
+ * every form field would yank the layout when tapped. Bumping the
+ * computed font-size at the mobile breakpoint suppresses the zoom
+ * without affecting desktop typography. */
+@media (max-width: 767px) {
+  input, textarea, select {
+    font-size: 16px;
+  }
+}

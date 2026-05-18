@@ -163,55 +163,66 @@
   }
 </script>
 
-<div class="p-4">
+<div class="p-2 md:p-4">
   {#if loadErr}
     <p class="text-xs mb-2" style="color: var(--latency-bad)">{loadErr}</p>
   {/if}
 
   {#if group}
-    <header class="mb-3">
-      <h1 class="text-sm font-semibold">{group.display_name}</h1>
-      <p class="text-[11px]" style="color: var(--muted)">
-        {hosts.length} probe{hosts.length === 1 ? '' : 's'} in this group + descendants
-      </p>
-    </header>
+    <!-- Sticky compact header (title + count + presets + LIVE + time
+         range). Same shape as the host page so the two feel coherent.
+         The preset strip horizontally scrolls on narrow viewports. -->
+    <div
+      class="sticky top-0 z-20 -mx-2 md:-mx-4 px-2 md:px-4 pt-2 md:pt-0 pb-2 border-b md:border-none"
+      style="background: var(--bg); border-color: var(--border)"
+    >
+      <header class="mb-2">
+        <h1 class="text-sm font-semibold truncate">{group.display_name}</h1>
+        <p class="text-[11px]" style="color: var(--muted)">
+          {hosts.length} probe{hosts.length === 1 ? '' : 's'} in this group + descendants
+        </p>
+      </header>
 
-    <div class="flex items-center gap-1 mb-3 sticky top-0 z-10 py-1" style="background: var(--bg)">
-      {#each PRESETS as p (p.label)}
+      <div class="flex items-center gap-1 overflow-x-auto -mx-2 px-2 md:mx-0 md:px-0">
+        {#each PRESETS as p (p.label)}
+          <button
+            type="button"
+            onclick={() => selectPreset(p)}
+            class="px-2 py-0.5 rounded text-xs shrink-0"
+            style="background: {preset.label === p.label ? 'var(--accent)' : 'var(--border)'}; color: {preset.label === p.label ? '#0b0d10' : 'var(--fg)'}"
+          >
+            {p.label}
+          </button>
+        {/each}
         <button
           type="button"
-          onclick={() => selectPreset(p)}
-          class="px-2 py-0.5 rounded text-xs"
-          style="background: {preset.label === p.label ? 'var(--accent)' : 'var(--border)'}; color: {preset.label === p.label ? '#0b0d10' : 'var(--fg)'}"
+          onclick={refreshNow}
+          class="ml-2 px-2 py-0.5 rounded text-xs shrink-0"
+          style="background: var(--border); color: var(--fg)"
+          title="Refresh now"
         >
-          {p.label}
+          ↻
         </button>
-      {/each}
-      <button
-        type="button"
-        onclick={refreshNow}
-        class="ml-2 px-2 py-0.5 rounded text-xs"
-        style="background: var(--border); color: var(--fg)"
-        title="Refresh now"
-      >
-        ↻
-      </button>
-      <button
-        type="button"
-        onclick={toggleLive}
-        class="px-2 py-0.5 rounded text-xs flex items-center gap-1"
-        style="background: {live ? 'var(--latency-good)' : 'var(--border)'}; color: {live ? '#0b0d10' : 'var(--fg)'}"
-        title={live ? 'Pause live follow' : 'Resume live follow'}
-      >
-        <span
-          class="inline-block rounded-full"
-          style="width: 6px; height: 6px; background: {live ? '#0b0d10' : 'var(--muted)'}; {live ? 'animation: haze-pulse 1.2s ease-in-out infinite' : ''}"
-        ></span>
-        {live ? 'LIVE' : 'PAUSED'}
-      </button>
-      <span class="ml-auto text-xs mono" style="color: var(--muted)">
+        <button
+          type="button"
+          onclick={toggleLive}
+          class="px-2 py-0.5 rounded text-xs flex items-center gap-1 shrink-0"
+          style="background: {live ? 'var(--latency-good)' : 'var(--border)'}; color: {live ? '#0b0d10' : 'var(--fg)'}"
+          title={live ? 'Pause live follow' : 'Resume live follow'}
+        >
+          <span
+            class="inline-block rounded-full"
+            style="width: 6px; height: 6px; background: {live ? '#0b0d10' : 'var(--muted)'}; {live ? 'animation: haze-pulse 1.2s ease-in-out infinite' : ''}"
+          ></span>
+          {live ? 'LIVE' : 'PAUSED'}
+        </button>
+        <span class="hidden md:inline ml-auto text-xs mono shrink-0" style="color: var(--muted)">
+          {formatRange(fromSecs, toSecs)}
+        </span>
+      </div>
+      <div class="md:hidden mt-1 text-[11px] mono" style="color: var(--muted)">
         {formatRange(fromSecs, toSecs)}
-      </span>
+      </div>
     </div>
 
     {#if hosts.length === 0}

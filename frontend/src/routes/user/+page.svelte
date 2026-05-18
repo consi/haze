@@ -7,6 +7,14 @@
   import { auth } from '$lib/auth.svelte';
   import { reloadKeys, disconnectEvents } from '$lib/events.svelte';
 
+  // The /user page is self-service for an authenticated account; useless
+  // without one. Public-mode visitors can reach this URL because the
+  // layout no longer redirects unauthenticated traffic away, so guard
+  // here instead.
+  $effect(() => {
+    if (!auth.user) void goto(`${base}/login`);
+  });
+
   // ─── Account info ────────────────────────────────────────────────────────
 
   // ─── Change password ────────────────────────────────────────────────────

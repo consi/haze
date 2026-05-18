@@ -1,14 +1,29 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
-  import { auth, canSeeAlerts, canSeeSettings, canEditHosts, canEditGroups } from '$lib/auth.svelte';
+  import {
+    auth,
+    publicMode,
+    canSeeAlerts,
+    canSeeSettings,
+    canEditHosts,
+    canEditGroups
+  } from '$lib/auth.svelte';
 
-  // The welcome page is logged-in-only. The layout's onMount redirect only
-  // runs on initial mount, so clicking the logo while signed-out used to
-  // land here without auth. This effect handles every subsequent visit.
+  // The welcome page is logged-in-only UNLESS public mode is on, in which
+  // case anonymous visitors stay here and see a trimmed read-only variant.
+  // The layout's onMount redirect only runs on initial mount, so clicking
+  // the logo while signed-out used to land here without auth — this effect
+  // handles every subsequent visit. Gated on `publicMode.initialized` so a
+  // cold load doesn't redirect before /server-info resolves.
   $effect(() => {
-    if (!auth.user) void goto(`${base}/login`);
+    if (publicMode.initialized && !auth.user && !publicMode.enabled) {
+      void goto(`${base}/login`);
+    }
   });
+
+  // Convenience: are we rendering the public/anonymous variant?
+  const isPublic = $derived(!auth.user && publicMode.enabled);
 
   // Mirrors `LOSS_PALETTE` in SmokeChart.svelte. Eight discrete buckets,
   // labelled by the packet-loss range they cover.
@@ -29,6 +44,13 @@
     <h1 class="font-display text-xl" style="font-weight: 700; color: var(--fg)">
       Welcome{auth.user ? `, ${auth.user.username}` : ''}
     </h1>
+    {#if isPublic}
+      <p class="text-xs mt-1" style="color: var(--muted)">
+        Read-only public view. Pick any host from the tree on the left.
+        Operators can <a href={`${base}/login`} class="underline" style="color: var(--fg)">sign in</a>
+        to manage hosts and configuration.
+      </p>
+    {/if}
     <p class="text-xs mt-1" style="color: var(--muted)">
       Haze probes hosts on a schedule, records the latency distribution for each
       probe period, and renders the result as a smoke graph - the chart you
@@ -97,58 +119,60 @@
     </ul>
   </section>
 
-  <section>
-    <h2 class="text-sm font-semibold mb-2" style="color: var(--fg)">Top bar</h2>
-    <ul class="text-xs space-y-0.5" style="color: var(--muted)">
-      <li>
-        <a href={`${base}/user`} class="mono font-semibold underline" style="color: var(--fg)">{auth.user?.username ?? 'username'}</a>
-        - your account. Change your password, register a passkey for password-less
-        sign-in, and generate API tokens for scripts/clients.
-      </li>
-      {#if canSeeAlerts()}
+  {#if !isPublic}
+    <section>
+      <h2 class="text-sm font-semibold mb-2" style="color: var(--fg)">Top bar</h2>
+      <ul class="text-xs space-y-0.5" style="color: var(--muted)">
         <li>
-          <a href={`${base}/alerting`} class="font-semibold underline" style="color: var(--fg)">alerting</a>
-          - rule + notifier management. Threshold-on-loss and threshold-on-latency
-          rules fire via webhooks. UI under construction; the engine is already running
-          in the background.
+          <a href={`${base}/user`} class="mono font-semibold underline" style="color: var(--fg)">{auth.user?.username ?? 'username'}</a>
+          - your account. Change your password, register a passkey for password-less
+          sign-in, and generate API tokens for scripts/clients.
         </li>
-      {/if}
-      {#if canSeeSettings()}
+        {#if canSeeAlerts()}
+          <li>
+            <a href={`${base}/alerting`} class="font-semibold underline" style="color: var(--fg)">alerting</a>
+            - rule + notifier management. Threshold-on-loss and threshold-on-latency
+            rules fire via webhooks. UI under construction; the engine is already running
+            in the background.
+          </li>
+        {/if}
+        {#if canSeeSettings()}
+          <li>
+            <a href={`${base}/settings`} class="font-semibold underline" style="color: var(--fg)">settings</a>
+            - system-wide settings (admin-only).
+          </li>
+        {/if}
         <li>
-          <a href={`${base}/settings`} class="font-semibold underline" style="color: var(--fg)">settings</a>
-          - system-wide settings (admin-only).
+          <span class="font-semibold" style="color: var(--fg)">log out</span> - end your session.
         </li>
-      {/if}
-      <li>
-        <span class="font-semibold" style="color: var(--fg)">log out</span> - end your session.
-      </li>
-    </ul>
-  </section>
+      </ul>
+    </section>
 
-  <section>
-    <h2 class="text-sm font-semibold mb-2" style="color: var(--fg)">API</h2>
-    <p class="text-xs mb-2" style="color: var(--muted)">
-      Every endpoint behind the UI is exposed as a versioned REST API. Use it
-      from your scripts, oncall runbooks - whatever consumes JSON.
-    </p>
-    <ul class="text-xs space-y-0.5" style="color: var(--muted)">
-      <li>
-        Browse the spec:
-        <a href={`${base}/api/docs`} class="mono underline" style="color: var(--fg)">{base}/api/docs</a>
-        (Swagger UI).
-      </li>
-      <li>
-        Raw JSON:
-        <a href={`${base}/api/openapi.json`} class="mono underline" style="color: var(--fg)">{base}/api/openapi.json</a>
-        - feed it to any OpenAPI client generator.
-      </li>
-      <li>
-        Authenticate with a personal access token created on the
-        <a href={`${base}/user`} class="underline" style="color: var(--fg)">account page</a>:
-        <span class="mono" style="color: var(--fg)">Authorization: Bearer hzt_…</span>
-      </li>
-    </ul>
-  </section>
+    <section>
+      <h2 class="text-sm font-semibold mb-2" style="color: var(--fg)">API</h2>
+      <p class="text-xs mb-2" style="color: var(--muted)">
+        Every endpoint behind the UI is exposed as a versioned REST API. Use it
+        from your scripts, oncall runbooks - whatever consumes JSON.
+      </p>
+      <ul class="text-xs space-y-0.5" style="color: var(--muted)">
+        <li>
+          Browse the spec:
+          <a href={`${base}/api/docs`} class="mono underline" style="color: var(--fg)">{base}/api/docs</a>
+          (Swagger UI).
+        </li>
+        <li>
+          Raw JSON:
+          <a href={`${base}/api/openapi.json`} class="mono underline" style="color: var(--fg)">{base}/api/openapi.json</a>
+          - feed it to any OpenAPI client generator.
+        </li>
+        <li>
+          Authenticate with a personal access token created on the
+          <a href={`${base}/user`} class="underline" style="color: var(--fg)">account page</a>:
+          <span class="mono" style="color: var(--fg)">Authorization: Bearer hzt_…</span>
+        </li>
+      </ul>
+    </section>
+  {/if}
 
   <footer class="pt-2 text-[11px] space-y-2" style="color: var(--muted); border-top: 1px solid var(--border)">
     <p>

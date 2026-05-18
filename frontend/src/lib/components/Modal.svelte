@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { startViewportTracking, viewport } from '$lib/viewport.svelte';
 
   let {
     title,
@@ -13,11 +14,15 @@
 
   // Close on Esc. Mounted on window so the modal doesn't have to be focused.
   onMount(() => {
+    const stopViewport = startViewportTracking();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      stopViewport();
+    };
   });
 
   // Track where the press started. A drag whose mousedown lands inside the
@@ -26,6 +31,11 @@
   // backdrop — with `e.target === e.currentTarget`. Without remembering the
   // press origin we'd close the modal on every such drag. We close only
   // when *both* ends of the click are on the backdrop itself.
+  //
+  // On mobile we don't dismiss on backdrop at all — the dialog goes
+  // full-screen so any stray touch on the "backdrop" is actually a
+  // user trying to scroll the dialog body. The X button is the only
+  // explicit dismissal there.
   let pressTarget: EventTarget | null = null;
 
   function onBackdropMouseDown(e: MouseEvent) {
@@ -33,6 +43,10 @@
   }
 
   function onBackdrop(e: MouseEvent) {
+    if (viewport.isMobile) {
+      pressTarget = null;
+      return;
+    }
     const both = e.target === e.currentTarget && pressTarget === e.currentTarget;
     pressTarget = null;
     if (both) onClose();
@@ -40,40 +54,50 @@
 </script>
 
 <!-- The backdrop is a dismissive overlay: clicking outside the dialog
-     closes the modal. Esc handles keyboard dismissal (see onMount), so
-     we suppress the static-interaction lint here rather than adding a
-     redundant role. -->
+     closes the modal on desktop. Esc handles keyboard dismissal (see
+     onMount), so we suppress the static-interaction lint here rather than
+     adding a redundant role. -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto"
-  style="background: rgba(0,0,0,0.45); padding: 4rem 1rem"
+  class="fixed inset-0 z-50 flex items-stretch md:items-start justify-center md:overflow-y-auto"
+  style="background: rgba(0,0,0,0.45);"
   onmousedown={onBackdropMouseDown}
   onclick={onBackdrop}
 >
   <div
-    class="w-full max-w-2xl rounded border shadow-lg"
+    class="
+      w-full md:max-w-2xl md:my-16 md:mx-4
+      md:rounded md:border md:shadow-lg
+      flex flex-col
+      max-h-full md:max-h-[calc(100vh-8rem)]
+    "
     style="background: var(--bg); border-color: var(--border)"
     role="dialog"
     aria-modal="true"
     aria-label={title}
   >
     <header
-      class="flex items-center justify-between px-3 py-2 border-b"
+      class="flex items-center justify-between px-3 py-2 border-b shrink-0"
       style="border-color: var(--border)"
     >
-      <h2 class="text-xs font-semibold" style="color: var(--fg)">{title}</h2>
+      <h2 class="text-sm md:text-xs font-semibold truncate pr-2" style="color: var(--fg)">{title}</h2>
       <button
         type="button"
         onclick={onClose}
-        class="text-xs px-1.5"
+        class="
+          flex items-center justify-center
+          w-11 h-11 md:w-6 md:h-6 -mr-2 md:mr-0
+          text-base md:text-xs
+          rounded
+        "
         style="color: var(--muted)"
         aria-label="Close"
       >
         ✕
       </button>
     </header>
-    <div class="p-3">
+    <div class="p-3 overflow-y-auto">
       {@render children()}
     </div>
   </div>

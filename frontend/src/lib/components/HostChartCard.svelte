@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import { untrack } from 'svelte';
   import { type Host, type SeriesResp } from '$lib/api';
   import { cancelInflight, isAbortError, loadSeries, samplesForWidth } from '$lib/series';
@@ -127,7 +128,7 @@
   }
 
   function openHost() {
-    void goto(`/hosts/${host.uuid}`);
+    void goto(`${base}/hosts/${host.uuid}`);
   }
 </script>
 

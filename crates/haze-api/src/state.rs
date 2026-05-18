@@ -34,6 +34,11 @@ pub struct AppState {
     /// response to drain — `broadcast::Receiver::recv().await` never
     /// resolves on its own, so we'd sit until SIGKILL.
     pub shutdown: Arc<Notify>,
+    /// `Path=` attribute for the session cookie. Equal to the normalized
+    /// `HAZE_BASE_URL` (e.g. `/haze`) so the browser only sends the cookie
+    /// back on URLs under the deployment sub-path. Empty string means root
+    /// (handlers render `Path=/`).
+    pub cookie_path: String,
 }
 
 impl AppState {

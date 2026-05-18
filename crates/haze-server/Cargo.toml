@@ -26,6 +26,7 @@ tracing = { workspace = true }
 anyhow = { workspace = true }
 rust-embed = { workspace = true }
 mime_guess = { workspace = true }
+dashmap = { workspace = true }
 rustls = { workspace = true }
 rand = { workspace = true }
 sqlx = { workspace = true }

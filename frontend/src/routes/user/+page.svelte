@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { startRegistration } from '@simplewebauthn/browser';
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import { api } from '$lib/api';
   import { auth } from '$lib/auth.svelte';
   import { reloadKeys, disconnectEvents } from '$lib/events.svelte';
@@ -41,7 +42,7 @@
       pwCurrent = '';
       pwNew = '';
       pwConfirm = '';
-      void goto('/login?reason=password-changed');
+      void goto(`${base}/login?reason=password-changed`);
       return;
     } catch (e) {
       pwErr = e instanceof Error ? e.message : String(e);

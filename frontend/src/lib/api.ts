@@ -1,6 +1,8 @@
 // Typed fetch wrapper. Hand-rolled until utoipa annotations cover more endpoints
 // and `npm run gen-api` becomes useful (lands in phase 5).
 
+import { base } from '$app/paths';
+
 export type Role = 'admin' | 'user' | 'reader' | 'disabled';
 
 export interface User {
@@ -224,7 +226,7 @@ async function req<T>(
 ): Promise<T> {
   const headers: Record<string, string> = init?.headers as Record<string, string> ?? {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const res = await fetch(`/api/v1${path}`, {
+  const res = await fetch(`${base}/api/v1${path}`, {
     method,
     credentials: 'same-origin',
     body: body !== undefined ? JSON.stringify(body) : undefined,

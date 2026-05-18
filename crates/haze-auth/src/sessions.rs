@@ -148,15 +148,23 @@ fn sha256(bytes: &[u8]) -> [u8; 32] {
 }
 
 /// Build a `Set-Cookie` header value for a new session.
-pub fn set_cookie(cookie_value: &str) -> String {
+///
+/// `path` is the `Path=` attribute — typically the normalized
+/// `HAZE_BASE_URL` (e.g. `/haze`). Empty string is treated as `/` so the
+/// root-mode behaviour is byte-identical to the previous hard-coded value.
+pub fn set_cookie(cookie_value: &str, path: &str) -> String {
+    let p = if path.is_empty() { "/" } else { path };
     format!(
-        "{COOKIE_NAME}={cookie_value}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age={ABSOLUTE_SECS}"
+        "{COOKIE_NAME}={cookie_value}; Path={p}; HttpOnly; SameSite=Lax; Secure; Max-Age={ABSOLUTE_SECS}"
     )
 }
 
-/// Build a `Set-Cookie` header value that clears the session.
-pub fn clear_cookie() -> String {
-    format!("{COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0")
+/// Build a `Set-Cookie` header value that clears the session. The `Path`
+/// attribute must match what was used to set the cookie — see
+/// [`set_cookie`].
+pub fn clear_cookie(path: &str) -> String {
+    let p = if path.is_empty() { "/" } else { path };
+    format!("{COOKIE_NAME}=; Path={p}; HttpOnly; SameSite=Lax; Secure; Max-Age=0")
 }
 
 /// Configure a background task that deletes expired sessions every hour.

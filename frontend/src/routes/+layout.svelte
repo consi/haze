@@ -24,6 +24,7 @@
   import { collapseAll, expandAll, treeState } from '$lib/tree-state.svelte';
   // expandAll is still used by the "++" header button.
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import { page } from '$app/state';
 
   // Single redirect path for any code path that detects the session is
@@ -33,7 +34,7 @@
   function handleUnauthorized() {
     disconnectEvents();
     auth.user = null;
-    if (page.url.pathname !== '/login') void goto('/login');
+    if (page.url.pathname !== `${base}/login`) void goto(`${base}/login`);
   }
   setUnauthorizedHandler(handleUnauthorized);
   setEventsUnauthorizedHandler(handleUnauthorized);
@@ -78,7 +79,7 @@
   onMount(async () => {
     await refresh();
     if (auth.user) await loadTree();
-    else if (page.url.pathname !== '/login') void goto('/login');
+    else if (page.url.pathname !== `${base}/login`) void goto(`${base}/login`);
   });
 
   // Re-fetch the tree whenever `auth.user` changes or another page calls
@@ -103,7 +104,7 @@
   async function doLogout() {
     disconnectEvents();
     await logout();
-    void goto('/login');
+    void goto(`${base}/login`);
   }
 
   // ─── Resizable tree pane ─────────────────────────────────────────────────
@@ -170,7 +171,7 @@
 <div class="min-h-screen flex flex-col">
   <header class="border-b flex items-baseline gap-3 px-3 py-1.5" style="border-color: var(--border)">
     <a
-      href="/"
+      href={`${base}/`}
       class="font-display"
       style="color: var(--fg); font-weight: 700; font-size: 16px; line-height: 1"
     >
@@ -182,24 +183,24 @@
     <span class="ml-auto text-xs flex items-center gap-3" style="color: var(--muted)">
       {#if auth.user}
         <a
-          href="/user"
+          href={`${base}/user`}
           class="mono hover:text-[var(--fg)]"
           style="color: var(--fg); font-weight: {auth.user.role === 'admin' ? 600 : 400}"
         >
           {auth.user.username}
         </a>
         {#if canSeeAlerts()}
-          <a href="/alerting" class="hover:text-[var(--fg)]">alerting</a>
+          <a href={`${base}/alerting`} class="hover:text-[var(--fg)]">alerting</a>
         {/if}
         {#if canSeeSettings()}
-          <a href="/settings" class="hover:text-[var(--fg)]">settings</a>
+          <a href={`${base}/settings`} class="hover:text-[var(--fg)]">settings</a>
         {/if}
         <button onclick={doLogout} class="hover:text-[var(--fg)]">log out</button>
       {/if}
     </span>
   </header>
 
-  {#if page.url.pathname === '/login' || !auth.user}
+  {#if page.url.pathname === `${base}/login` || !auth.user}
     <main class="flex-1">
       {@render children?.()}
     </main>

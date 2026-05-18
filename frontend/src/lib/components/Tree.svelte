@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Group, Host } from '$lib/api';
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import { page } from '$app/state';
   import { treeState, toggle as toggleNode } from '$lib/tree-state.svelte';
 
@@ -60,10 +61,10 @@
   }
 
   function pickHost(uuid: string) {
-    void goto(`/hosts/${uuid}`);
+    void goto(`${base}/hosts/${uuid}`);
   }
   function pickGroup(uuid: string) {
-    void goto(`/groups/${uuid}`);
+    void goto(`${base}/groups/${uuid}`);
   }
 
   function totalHostsIn(node: Node): number {

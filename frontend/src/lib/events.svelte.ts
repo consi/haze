@@ -12,6 +12,8 @@
 // We route that to the unauthorized handler so the tab redirects to /login
 // even while it's idle, without waiting for the user's next API call.
 
+import { base } from '$app/paths';
+
 import { treeState } from './tree-state.svelte';
 
 export const reloadKeys = $state({
@@ -42,7 +44,7 @@ function bumpAll() {
 export function connectEvents() {
   if (es) return;
   intentionalClose = false;
-  const source = new EventSource('/api/v1/events');
+  const source = new EventSource(`${base}/api/v1/events`);
   // Listen for the named `change` events the backend emits. Default
   // unnamed messages are not used.
   source.addEventListener('change', (ev) => {

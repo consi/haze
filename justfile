@@ -49,6 +49,12 @@ dev:
     @echo "Terminal 1:  just backend"
     @echo "Terminal 2:  just frontend"
     @echo "Then open:   http://127.0.0.1:5173"
+    @echo ""
+    @echo "Sub-path testing (deploy under e.g. /haze):"
+    @echo "  Terminal 1:  HAZE_BASE_URL=/haze just backend"
+    @echo "  Terminal 2:  just frontend"
+    @echo "  Then open:   http://127.0.0.1:5173/__HAZE_BASE__/  (Vite proxy strips the sentinel)"
+    @echo "             or http://127.0.0.1:4420/haze/         (talking to the backend directly)"
 
 # ─── Build ──────────────────────────────────────────────────────────────────
 

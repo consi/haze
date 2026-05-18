@@ -91,8 +91,29 @@ The image is distroless (`gcr.io/distroless/static-debian12:nonroot`) and ships 
 | `HAZE_DATA_DIR`   | `./data` (binary), `/var/lib/haze` (systemd) | SQLite database and probe chunk files (HZC).              |
 | `HAZE_LOG`        | `info`               | `tracing-subscriber` directive, e.g. `haze=debug,info`.                              |
 | `HAZE_ORIGIN`     | _unset_              | Public origin (`https://haze.example.com`) — required for WebAuthn passkeys.         |
+| `HAZE_BASE_URL`   | _unset_ (root `/`)   | URL path prefix to deploy under, e.g. `/haze`. See [Reverse-proxying under a sub-path](#reverse-proxying-under-a-sub-path). |
 
-CLI flags mirror the env vars (`--bind`, `--data-dir`, `--log`, `--origin`).
+CLI flags mirror the env vars (`--bind`, `--data-dir`, `--log`, `--origin`, `--base-url` / `--base-path`).
+
+### Reverse-proxying under a sub-path
+
+By default Haze serves the UI and API at the root path (`/`). To deploy it under a sub-path — e.g. `https://example.com/haze/` — set `HAZE_BASE_URL` (or pass `--base-path /haze`) on the haze process. The same binary / Docker image works at any path; the frontend is rewritten at serve time so no rebuild is needed.
+
+The prefix must be a URL path only — no scheme, no host. `/haze` and `/monitoring/haze` are valid; `https://x.com/haze` is rejected at startup.
+
+Example nginx config:
+
+```nginx
+location /haze/ {
+    proxy_pass http://127.0.0.1:4420/haze/;   # note: prefix must be passed through, not stripped
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+    proxy_buffering off;                      # required for the SSE stream at /haze/api/v1/events
+}
+```
+
+Container/k8s liveness probes can keep hitting `/healthz` directly — that route is always served at the root path regardless of `HAZE_BASE_URL` so the probe doesn't have to go through the reverse proxy. The same probe is also reachable at `${HAZE_BASE_URL}/healthz` for proxied checks.
 
 ## Building from source
 

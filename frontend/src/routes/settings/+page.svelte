@@ -16,6 +16,7 @@
     type WorkerSettings
   } from '$lib/api';
   import { reloadKeys } from '$lib/events.svelte';
+  import { base } from '$app/paths';
   import { onMount } from 'svelte';
 
   // ─── Storage ──────────────────────────────────────────────────────────────
@@ -676,7 +677,7 @@
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 1000));
       try {
-        const res = await fetch('/healthz', { cache: 'no-store' });
+        const res = await fetch(`${base}/healthz`, { cache: 'no-store' });
         if (res.ok) return;
       } catch {
         // Network error - server still down. Keep trying.

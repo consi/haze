@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import { page } from '$app/state';
   import { startAuthentication } from '@simplewebauthn/browser';
   import { login as pwLogin, auth } from '$lib/auth.svelte';
@@ -36,7 +37,7 @@
     submitting = true;
     try {
       await pwLogin(username, password);
-      void goto('/');
+      void goto(`${base}/`);
     } catch (e) {
       err = e instanceof Error ? e.message : String(e);
     } finally {
@@ -54,7 +55,7 @@
       const cred = await startAuthentication({ optionsJSON: optionsJSON as never });
       const user = await api.passkeyLoginFinish(begin.token, cred);
       auth.user = user;
-      void goto('/');
+      void goto(`${base}/`);
     } catch (e) {
       err = e instanceof Error ? e.message : String(e);
     } finally {

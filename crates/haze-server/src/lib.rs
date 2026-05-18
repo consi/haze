@@ -18,9 +18,42 @@ pub struct Config {
     /// Origin URL the browser sees (e.g. `https://haze.example.com`). Used for
     /// `WebAuthn` passkey ceremonies. If `None`, passkeys are disabled.
     pub origin: Option<String>,
+    /// URL path prefix to deploy under, e.g. `/haze`. Empty string means
+    /// the app is served at root `/`. Normalized inside `run()`.
+    pub base_url: String,
+}
+
+/// Normalize `HAZE_BASE_URL`/`--base-url` into a canonical form:
+/// - empty / `/` / whitespace → `""` (root mode, byte-identical to today)
+/// - `foo` → `/foo`
+/// - `/foo/` → `/foo`
+/// - anything containing `://`, `?`, or `#` is rejected as it's not a
+///   path prefix.
+fn normalize_base(raw: &str) -> Result<String> {
+    let s = raw.trim();
+    if s.is_empty() || s == "/" {
+        return Ok(String::new());
+    }
+    if s.contains("://") || s.contains('?') || s.contains('#') {
+        anyhow::bail!(
+            "HAZE_BASE_URL must be a URL path prefix (e.g. /haze), not a full URL: {raw:?}"
+        );
+    }
+    let with_lead = if s.starts_with('/') {
+        s.to_string()
+    } else {
+        format!("/{s}")
+    };
+    Ok(with_lead.trim_end_matches('/').to_string())
 }
 
 pub async fn run(cfg: Config) -> Result<()> {
+    let base_url = normalize_base(&cfg.base_url)?;
+    if base_url.is_empty() {
+        tracing::info!("serving at root path /");
+    } else {
+        tracing::info!(base_url = %base_url, "serving under sub-path");
+    }
     // Install rustls's `ring` crypto provider as the process-level default.
     // Required by rustls 0.23+: any consumer (tokio-rustls in the TLS-CONNECT
     // probe, reqwest in the HTTP probes, webauthn-rs's signature verification)
@@ -246,16 +279,20 @@ pub async fn run(cfg: Config) -> Result<()> {
     // and let axum's graceful shutdown drain. Without this, an open
     // browser EventSource pins the server alive until the kill timeout.
     let shutdown = Arc::new(tokio::sync::Notify::new());
-    let app = build_app(haze_api::AppState {
-        pool,
-        hzc,
-        data_dir: cfg.data_dir.clone(),
-        scheduler: scheduler_handle,
-        passkeys,
-        series,
-        events: events_tx,
-        shutdown: shutdown.clone(),
-    });
+    let app = build_app(
+        haze_api::AppState {
+            pool,
+            hzc,
+            data_dir: cfg.data_dir.clone(),
+            scheduler: scheduler_handle,
+            passkeys,
+            series,
+            events: events_tx,
+            shutdown: shutdown.clone(),
+            cookie_path: base_url.clone(),
+        },
+        &base_url,
+    );
 
     let addr: SocketAddr = cfg.bind.parse().context("invalid --bind address")?;
     let listener = tokio::net::TcpListener::bind(addr)
@@ -269,15 +306,45 @@ pub async fn run(cfg: Config) -> Result<()> {
         .context("axum serve failed")
 }
 
-fn build_app(state: haze_api::AppState) -> axum::Router {
-    // CompressionLayer covers only the /api nest — static assets are already
-    // pre-compressed by the Vite build (assets.rs picks the right .gz/.br
-    // variant by Accept-Encoding) and would otherwise be double-encoded.
-    let api = haze_api::api_router(state).layer(CompressionLayer::new());
+fn build_app(state: haze_api::AppState, base: &str) -> axum::Router {
+    let api = haze_api::api_router(state);
+    let base_for_handler = base.to_owned();
+    let assets_handler = move |req| assets::handler(req, base_for_handler.clone());
+
+    // Inner router: API + asset fallback. When a base is configured this
+    // whole router is nested under it (`${base}/api/...`, `${base}/...`),
+    // and `/healthz` is also mounted inside so a reverse-proxied probe
+    // works. In root mode the inner router is merged directly and
+    // `/healthz` lives only at the top level (avoiding an overlap).
+    //
+    // CompressionLayer is applied here (covers /api and the asset
+    // fallback). The asset handler always rewrites the `__HAZE_BASE__`
+    // placeholder baked in by SvelteKit's `kit.paths.base`, so the build
+    // step's pre-compressed `.br`/`.gz` siblings can't be served as-is
+    // and we rely on on-the-fly compression instead.
+    let mut inner = Router::new().nest("/api", api).fallback(assets_handler);
+    if !base.is_empty() {
+        // Mirror /healthz under the sub-path so the frontend's
+        // restart-recovery poll (which uses `${base}/healthz`) and any
+        // reverse-proxied health checks reach the same handler.
+        inner = inner.route("/healthz", get(healthz));
+    }
+    let inner = inner.layer(CompressionLayer::new());
+
+    let mounted = if base.is_empty() {
+        inner
+    } else {
+        Router::new().nest(base, inner)
+    };
+
     let router = Router::new()
+        // `/healthz` is always reachable at the root path regardless of
+        // `HAZE_BASE_URL` so container/k8s liveness probes don't need to
+        // know about the deployment sub-path. When a base is set, the
+        // same probe is also mounted under it (see `inner` above) so the
+        // reverse-proxied frontend's restart poll can reach it.
         .route("/healthz", get(healthz))
-        .nest("/api", api)
-        .fallback(assets::handler)
+        .merge(mounted)
         .layer(TraceLayer::new_for_http());
     // NormalizePathLayer trims trailing slashes before routing so `/api/v1/groups/`
     // matches the same route as `/api/v1/groups`. Applied outside the router so

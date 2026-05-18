@@ -1,12 +1,13 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import { auth, canSeeAlerts, canSeeSettings, canEditHosts, canEditGroups } from '$lib/auth.svelte';
 
   // The welcome page is logged-in-only. The layout's onMount redirect only
   // runs on initial mount, so clicking the logo while signed-out used to
   // land here without auth. This effect handles every subsequent visit.
   $effect(() => {
-    if (!auth.user) void goto('/login');
+    if (!auth.user) void goto(`${base}/login`);
   });
 
   // Mirrors `LOSS_PALETTE` in SmokeChart.svelte. Eight discrete buckets,
@@ -100,13 +101,13 @@
     <h2 class="text-sm font-semibold mb-2" style="color: var(--fg)">Top bar</h2>
     <ul class="text-xs space-y-0.5" style="color: var(--muted)">
       <li>
-        <a href="/user" class="mono font-semibold underline" style="color: var(--fg)">{auth.user?.username ?? 'username'}</a>
+        <a href={`${base}/user`} class="mono font-semibold underline" style="color: var(--fg)">{auth.user?.username ?? 'username'}</a>
         - your account. Change your password, register a passkey for password-less
         sign-in, and generate API tokens for scripts/clients.
       </li>
       {#if canSeeAlerts()}
         <li>
-          <a href="/alerting" class="font-semibold underline" style="color: var(--fg)">alerting</a>
+          <a href={`${base}/alerting`} class="font-semibold underline" style="color: var(--fg)">alerting</a>
           - rule + notifier management. Threshold-on-loss and threshold-on-latency
           rules fire via webhooks. UI under construction; the engine is already running
           in the background.
@@ -114,7 +115,7 @@
       {/if}
       {#if canSeeSettings()}
         <li>
-          <a href="/settings" class="font-semibold underline" style="color: var(--fg)">settings</a>
+          <a href={`${base}/settings`} class="font-semibold underline" style="color: var(--fg)">settings</a>
           - system-wide settings (admin-only).
         </li>
       {/if}
@@ -133,17 +134,17 @@
     <ul class="text-xs space-y-0.5" style="color: var(--muted)">
       <li>
         Browse the spec:
-        <a href="/api/docs" class="mono underline" style="color: var(--fg)">/api/docs</a>
+        <a href={`${base}/api/docs`} class="mono underline" style="color: var(--fg)">{base}/api/docs</a>
         (Swagger UI).
       </li>
       <li>
         Raw JSON:
-        <a href="/api/openapi.json" class="mono underline" style="color: var(--fg)">/api/openapi.json</a>
+        <a href={`${base}/api/openapi.json`} class="mono underline" style="color: var(--fg)">{base}/api/openapi.json</a>
         - feed it to any OpenAPI client generator.
       </li>
       <li>
         Authenticate with a personal access token created on the
-        <a href="/user" class="underline" style="color: var(--fg)">account page</a>:
+        <a href={`${base}/user`} class="underline" style="color: var(--fg)">account page</a>:
         <span class="mono" style="color: var(--fg)">Authorization: Bearer hzt_…</span>
       </li>
     </ul>

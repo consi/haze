@@ -27,6 +27,18 @@ struct Cli {
     /// Required for `WebAuthn` passkeys; if omitted, passkeys are disabled.
     #[arg(long, env = "HAZE_ORIGIN")]
     origin: Option<String>,
+
+    /// URL path prefix to deploy under, e.g. `/haze`. Empty/unset means
+    /// the app is served at root `/`. The prefix must be a path only —
+    /// scheme, host, query or fragment are rejected.
+    #[arg(long, env = "HAZE_BASE_URL", default_value = "")]
+    base_url: String,
+
+    /// Alias for `--base-url`. Accepted because "base path" is the more
+    /// natural framing for this knob even though the env var keeps the
+    /// `URL` suffix for symmetry with the existing `HAZE_*` family.
+    #[arg(long, conflicts_with = "base_url")]
+    base_path: Option<String>,
 }
 
 #[tokio::main]
@@ -38,6 +50,7 @@ async fn main() -> Result<()> {
         bind: cli.bind,
         data_dir: cli.data_dir,
         origin: cli.origin,
+        base_url: cli.base_path.unwrap_or(cli.base_url),
     })
     .await
     .context("server exited with error")

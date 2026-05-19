@@ -423,7 +423,7 @@ impl From<AlertState> for AlertStateResp {
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 pub(crate) struct ListStatesQuery {
-    /// Include rows whose severity is currently `ok`. Off by default —
+    /// Include rows whose severity is currently `ok`. Off by default -
     /// the dashboard only renders firing/warning rows, so dragging every
     /// resolved-but-not-yet-pruned row across the wire is wasted bytes
     /// at large host counts.

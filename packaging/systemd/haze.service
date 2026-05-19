@@ -17,7 +17,7 @@ Environment=HAZE_BIND=0.0.0.0:4420
 
 # WebAuthn passkeys require the public origin where users will reach the UI
 # (scheme + host + optional port, no path). Uncomment and set this before
-# registering passkeys — password login works without it. The value must
+# registering passkeys - password login works without it. The value must
 # exactly match the URL in the browser address bar; mismatches cause silent
 # registration failures.
 #Environment=HAZE_ORIGIN=https://haze.example.com

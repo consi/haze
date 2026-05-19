@@ -5,6 +5,7 @@
   import { isAbortError, loadSeries, samplesForWidth } from '$lib/series';
   import SmokeChart from '$lib/components/SmokeChart.svelte';
   import SmallMultiples from '$lib/components/SmallMultiples.svelte';
+  import { fmt, partsInZone } from '$lib/timezone.svelte';
 
   let hostUuid = $derived(page.params.uuid);
   let host = $state<Host | null>(null);
@@ -134,15 +135,13 @@
   }
 
   // Human-readable display of the currently visible window. Compresses to
-  // "HH:MM:SS - HH:MM:SS" when both endpoints fall on the same calendar day,
-  // and expands to full dates when they don't.
+  // "HH:MM:SS - HH:MM:SS" when both endpoints fall on the same calendar day
+  // (in the configured timezone), and expands to full dates when they don't.
   function formatRange(from: number, to: number): string {
-    const fromD = new Date(from * 1000);
-    const toD = new Date(to * 1000);
+    const fromP = partsInZone(from);
+    const toP = partsInZone(to);
     const sameDay =
-      fromD.getFullYear() === toD.getFullYear() &&
-      fromD.getMonth() === toD.getMonth() &&
-      fromD.getDate() === toD.getDate();
+      fromP.year === toP.year && fromP.month === toP.month && fromP.day === toP.day;
     const dateOpts: Intl.DateTimeFormatOptions = {
       year: 'numeric',
       month: 'short',
@@ -154,20 +153,12 @@
       second: '2-digit',
       hour12: false
     };
-    if (sameDay) {
-      const date = fromD.toLocaleDateString(undefined, dateOpts);
-      return `${date}  ${fromD.toLocaleTimeString(undefined, timeOpts)} → ${toD.toLocaleTimeString(
-        undefined,
-        timeOpts
-      )}`;
-    }
-    return `${fromD.toLocaleDateString(undefined, dateOpts)} ${fromD.toLocaleTimeString(
-      undefined,
-      timeOpts
-    )} → ${toD.toLocaleDateString(undefined, dateOpts)} ${toD.toLocaleTimeString(
-      undefined,
-      timeOpts
-    )}`;
+    const fromDate = fmt(from, dateOpts);
+    const fromTime = fmt(from, timeOpts);
+    const toTime = fmt(to, timeOpts);
+    if (sameDay) return `${fromDate}  ${fromTime} → ${toTime}`;
+    const toDate = fmt(to, dateOpts);
+    return `${fromDate} ${fromTime} → ${toDate} ${toTime}`;
   }
 
   $effect(() => {
@@ -355,7 +346,14 @@
              the available data still draws the full window with empty space
              on the left, and so zoom-in to a custom range exactly matches
              what the user dragged. -->
-        <SmokeChart {series} {onZoom} xMin={fromSecs} xMax={toSecs} height={260} />
+        <SmokeChart
+          {series}
+          {onZoom}
+          xMin={fromSecs}
+          xMax={toSecs}
+          height={260}
+          title={host?.display_name ?? 'host'}
+        />
       {:else if loading}
         <p class="text-xs p-4" style="color: var(--muted)">Loading…</p>
       {:else}
@@ -365,7 +363,7 @@
       {/if}
     </div>
 
-    <SmallMultiples hostUuid={host.uuid} {onZoom} />
+    <SmallMultiples hostUuid={host.uuid} hostName={host.display_name} {onZoom} />
   {:else}
     <p class="text-xs" style="color: var(--muted)">Loading…</p>
   {/if}

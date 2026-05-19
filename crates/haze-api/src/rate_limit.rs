@@ -1,12 +1,12 @@
 //! Per-IP rate limiting for anonymous (public-mode) traffic.
 //!
-//! Two limiter classes — "light" (server-info, tree, groups, hosts list /
+//! Two limiter classes - "light" (server-info, tree, groups, hosts list /
 //! detail, events) and "series" (`/hosts/{uuid}/series`, which a viewer
 //! can hammer while paging through hosts). Authenticated requests bypass
 //! the limiter entirely: the middleware short-circuits when the request
 //! already carries a `CurrentUser` extension attached by `session_layer`.
 //!
-//! Limits live in the `public_mode` setting and are rebuilt on save —
+//! Limits live in the `public_mode` setting and are rebuilt on save -
 //! the middleware reads an `ArcSwap` so the change is lock-free.
 
 use std::{
@@ -150,7 +150,7 @@ pub async fn rate_limit_layer(
 }
 
 fn pick_limiter<'a>(limiters: &'a Limiters, path: &str) -> &'a IpRateLimiter {
-    // The series endpoint is `/api/v1/hosts/{uuid}/series` — match by
+    // The series endpoint is `/api/v1/hosts/{uuid}/series` - match by
     // suffix so the path is robust to the base-URL prefix.
     if path.ends_with("/series") {
         &limiters.series

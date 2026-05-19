@@ -38,7 +38,7 @@ const COL_LEN_PREFIX: usize = 4;
 /// Decoded view of a chunk file's 12-byte header.
 ///
 /// The on-wire bytes are inside the zstd-compressed body, so reading the
-/// header still requires a small zstd-decode of a few hundred bytes — but no
+/// header still requires a small zstd-decode of a few hundred bytes - but no
 /// column-decoding.
 #[derive(Debug, Clone, Copy)]
 pub struct ChunkHeader {
@@ -117,7 +117,7 @@ pub fn encode_chunk(samples: &[(i64, Slot)]) -> Result<Vec<u8>, ChunkEncodeError
 ///
 /// Used by the migration pass to shape-check existing chunks without paying
 /// the full column-decode cost. Reads only the first ~1 KiB from disk (one
-/// zstd frame's worth) — the rest of the file isn't touched.
+/// zstd frame's worth) - the rest of the file isn't touched.
 pub fn read_header(path: &std::path::Path) -> Result<ChunkHeader, ChunkDecodeError> {
     let bytes = std::fs::read(path).map_err(ChunkDecodeError::Zstd)?;
     let body = zstd::decode_all(bytes.as_slice()).map_err(ChunkDecodeError::Zstd)?;

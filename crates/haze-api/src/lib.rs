@@ -39,7 +39,7 @@ pub fn api_router(state: AppState) -> Router {
 }
 
 /// Swagger UI page. The `OpenAPI` URL is built as an absolute path so a
-/// trailing-slash visit (`/api/docs/`) resolves it correctly — otherwise
+/// trailing-slash visit (`/api/docs/`) resolves it correctly - otherwise
 /// the relative `openapi.json` would resolve to
 /// `/api/docs/openapi.json`, fall through to the SPA index.html, and
 /// Swagger UI would render a "Parser error on line N / invalid version
@@ -298,7 +298,7 @@ const PUBLIC_MODE_ANONYMOUS: &[(&str, &str)] = &[
 /// Two runtime rewrites on top of the compile-time `ApiDoc`:
 ///
 /// 1. `servers` is injected from `state.cookie_path` so the spec stays
-///    correct under `HAZE_BASE_URL` — the path entries are hardcoded
+///    correct under `HAZE_BASE_URL` - the path entries are hardcoded
 ///    `/api/v1/...` and any consumer (Swagger UI's "Try it out", client
 ///    generators) needs the deployment base prefix.
 ///

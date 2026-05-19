@@ -3,6 +3,7 @@
   import { untrack } from 'svelte';
   import { api, type Group, type Host, type StorageSettings } from '$lib/api';
   import HostChartCard from '$lib/components/HostChartCard.svelte';
+  import { fmt, partsInZone } from '$lib/timezone.svelte';
 
   let groupUuid = $derived(page.params.uuid);
   let group = $state<Group | null>(null);
@@ -133,12 +134,10 @@
   }
 
   function formatRange(from: number, to: number): string {
-    const fromD = new Date(from * 1000);
-    const toD = new Date(to * 1000);
+    const fromP = partsInZone(from);
+    const toP = partsInZone(to);
     const sameDay =
-      fromD.getFullYear() === toD.getFullYear() &&
-      fromD.getMonth() === toD.getMonth() &&
-      fromD.getDate() === toD.getDate();
+      fromP.year === toP.year && fromP.month === toP.month && fromP.day === toP.day;
     const dOpts: Intl.DateTimeFormatOptions = {
       year: 'numeric',
       month: 'short',
@@ -150,16 +149,11 @@
       second: '2-digit',
       hour12: false
     };
-    if (sameDay) {
-      return `${fromD.toLocaleDateString(undefined, dOpts)}  ${fromD.toLocaleTimeString(
-        undefined,
-        tOpts
-      )} → ${toD.toLocaleTimeString(undefined, tOpts)}`;
-    }
-    return `${fromD.toLocaleDateString(undefined, dOpts)} ${fromD.toLocaleTimeString(
-      undefined,
-      tOpts
-    )} → ${toD.toLocaleDateString(undefined, dOpts)} ${toD.toLocaleTimeString(undefined, tOpts)}`;
+    const fromDate = fmt(from, dOpts);
+    const fromTime = fmt(from, tOpts);
+    const toTime = fmt(to, tOpts);
+    if (sameDay) return `${fromDate}  ${fromTime} → ${toTime}`;
+    return `${fromDate} ${fromTime} → ${fmt(to, dOpts)} ${toTime}`;
   }
 </script>
 

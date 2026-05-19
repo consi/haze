@@ -44,16 +44,21 @@
   let advancedOpen = $state(false);
   let chunkWindowMinutes = $state(60);
 
-  let ping = $state({ target: '8.8.8.8', prefer_ipv6: false });
-  let dns = $state({ query: 'example.com', record_type: 'A', resolver: '' });
-  let tcp = $state({ host: 'example.com', port: 443 });
-  let tls = $state({ host: 'example.com', port: 443, sni: '', verify: true });
+  // Target fields start blank - the previous defaults ('8.8.8.8',
+  // 'example.com', 'https://example.com') turned out to be a footgun:
+  // users submitted them as-is, creating real probes against the example
+  // values. The examples now live in `placeholder` so they hint at format
+  // without becoming the actual submitted value.
+  let ping = $state({ target: '', prefer_ipv6: false });
+  let dns = $state({ query: '', record_type: 'A', resolver: '' });
+  let tcp = $state({ host: '', port: 443 });
+  let tls = $state({ host: '', port: 443, sni: '', verify: true });
   // Expected HTTP status codes are stored as an array of chips. Each chip is
   // either an exact 3-digit code (`100..=599`) or one of the class shortcuts
   // `1xx 2xx 3xx 4xx 5xx`. The backend stores them as a comma-joined
   // string; we split/join at the form boundary.
   let httpTtfb = $state({
-    url: 'https://example.com',
+    url: '',
     method: 'GET',
     expect_statuses: ['2xx'] as string[],
     statusInput: '',
@@ -61,7 +66,7 @@
     follow_redirects: false
   });
   let httpTotal = $state({
-    url: 'https://example.com',
+    url: '',
     method: 'GET',
     expect_statuses: ['2xx'] as string[],
     statusInput: '',
@@ -468,7 +473,7 @@
       {#if kind === 'ping'}
         <label class="block mb-2">
           <span style="color: var(--muted)">Target (IP or hostname)</span>
-          <input bind:value={ping.target} type="text" required
+          <input bind:value={ping.target} type="text" required placeholder="e.g. 8.8.8.8"
             class="w-full mt-0.5 px-2 py-1 rounded border" style={inputStyle} />
         </label>
         <label class="flex items-center gap-2">
@@ -479,7 +484,7 @@
       {:else if kind === 'dns'}
         <label class="block mb-2">
           <span style="color: var(--muted)">Query name</span>
-          <input bind:value={dns.query} type="text" required
+          <input bind:value={dns.query} type="text" required placeholder="e.g. example.com"
             class="w-full mt-0.5 px-2 py-1 rounded border" style={inputStyle} />
         </label>
         <div class="grid grid-cols-2 gap-2">
@@ -503,7 +508,7 @@
         <div class="grid grid-cols-3 gap-2">
           <label class="block col-span-2">
             <span style="color: var(--muted)">Host</span>
-            <input bind:value={tcp.host} type="text" required
+            <input bind:value={tcp.host} type="text" required placeholder="e.g. example.com"
               class="w-full mt-0.5 px-2 py-1 rounded border" style={inputStyle} />
           </label>
           <label class="block">
@@ -517,7 +522,7 @@
         <div class="grid grid-cols-3 gap-2 mb-2">
           <label class="block col-span-2">
             <span style="color: var(--muted)">Host</span>
-            <input bind:value={tls.host} type="text" required
+            <input bind:value={tls.host} type="text" required placeholder="e.g. example.com"
               class="w-full mt-0.5 px-2 py-1 rounded border" style={inputStyle} />
           </label>
           <label class="block">

@@ -234,7 +234,7 @@ export function setUnauthorizedHandler(h: () => void) {
 }
 
 // Paths where a 401 is a normal outcome and must NOT trigger the global
-// redirect — otherwise we'd loop on the login page or stomp the initial
+// redirect - otherwise we'd loop on the login page or stomp the initial
 // "are you signed in?" probe.
 const UNAUTH_OK_PREFIXES = ['/auth/login', '/auth/me', '/auth/passkey/login'];
 
@@ -276,7 +276,7 @@ async function req<T>(
     noteThrottled(waitSecs);
     try {
       await new Promise((r) => setTimeout(r, waitSecs * 1000));
-      // One retry — if the server is still over the limit, surface a
+      // One retry - if the server is still over the limit, surface a
       // proper 429 error rather than retrying indefinitely.
       res = await doFetch(method, path, body, init);
     } finally {
@@ -380,7 +380,7 @@ export const api = {
     return req('GET', '/server-info');
   },
 
-  // Tree — combined groups + hosts in a single round-trip. Preferred for
+  // Tree - combined groups + hosts in a single round-trip. Preferred for
   // the sidebar reload path; the standalone listGroups()/listHosts()
   // endpoints stay for code that only needs one side or wants a filter.
   getTree(): Promise<{ groups: Group[]; hosts: Host[] }> {

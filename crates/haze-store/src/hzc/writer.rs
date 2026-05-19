@@ -212,7 +212,28 @@ impl HostWriter {
                 continue;
             }
             // Live WAL: replay into open chunk buffer (or seal earlier ones).
-            let records = wal::replay(path)?;
+            // If replay found corruption past the last good record, truncate
+            // the file to the recovered byte count so future appends don't
+            // re-trip the same error every restart. Without this the probe
+            // loop for this host would log "malformed WAL record" on every
+            // open() forever.
+            let outcome = wal::replay(path)?;
+            let file_len = fs::metadata(path)?.len();
+            if outcome.valid_bytes < file_len {
+                let discarded = file_len - outcome.valid_bytes;
+                tracing::warn!(
+                    host_uuid = %meta.host_uuid,
+                    seq = *seq,
+                    wal_path = %path.display(),
+                    discarded_bytes = discarded,
+                    recovered_records = outcome.records.len(),
+                    "wal corruption: truncating malformed tail and continuing"
+                );
+                let f = OpenOptions::new().write(true).open(path)?;
+                f.set_len(outcome.valid_bytes)?;
+                f.sync_all()?;
+            }
+            let records = outcome.records;
             if records.is_empty() {
                 let _ = fs::remove_file(path);
                 continue;
@@ -230,7 +251,7 @@ impl HostWriter {
                     start,
                     end,
                     0, // raw resolution
-                    0, // generation 0 — per-window chunk
+                    0, // generation 0 - per-window chunk
                     &records,
                 )?;
                 let _ = fs::remove_file(path);
@@ -328,7 +349,7 @@ impl HostWriter {
             chunk.start_ts,
             chunk.end_ts,
             0, // raw resolution
-            0, // generation 0 — per-window chunk
+            0, // generation 0 - per-window chunk
             &chunk.samples,
         )?;
         let _ = fs::remove_file(&chunk.wal_path);
@@ -384,7 +405,7 @@ fn chunks_for_seq(chunks_dir: &Path, seq: u64) -> Result<Option<PathBuf>, HzcErr
         let path = entry.path();
         if let Ok(cr) = parse_chunk_filename(&path) {
             // A WAL at `<seq>.wal` was sealed by a `g0` chunk at the same
-            // seq — that's the crash-recovery short-circuit. A bundle (g≥1)
+            // seq - that's the crash-recovery short-circuit. A bundle (g≥1)
             // happens to use seqs from the same numeric range but does NOT
             // represent the seal of any single WAL; ignore it here, otherwise
             // we'd delete the live writer's open WAL on restart.
@@ -397,7 +418,7 @@ fn chunks_for_seq(chunks_dir: &Path, seq: u64) -> Result<Option<PathBuf>, HzcErr
 }
 
 /// Encode + atomically rename in a chunk file. Shared by the writer's
-/// normal seal path, the crash-recovery path, and the compactor — including
+/// normal seal path, the crash-recovery path, and the compactor - including
 /// the rollup pass that emits `generation = 1` daily bundles.
 pub(super) fn seal_chunk_inline(
     host_dir: &Path,
@@ -500,6 +521,72 @@ mod tests {
 
         let chunks_count = fs::read_dir(host_dir.join(CHUNKS_DIR)).unwrap().count();
         assert_eq!(chunks_count, 2);
+    }
+
+    #[test]
+    fn crash_recovery_truncates_malformed_wal() {
+        use std::io::Write;
+        let dir = TempDir::new().unwrap();
+        let uuid = Uuid::new_v4();
+        // Phase 1: write two clean samples, then drop the writer without
+        // sealing (simulates crash mid-window).
+        {
+            let w = HostWriter::open(dir.path(), uuid, 30, 60).unwrap();
+            w.write_sample(10, slot(21.0)).unwrap();
+            w.write_sample(20, slot(22.0)).unwrap();
+        }
+        let host_dir = host_directory(dir.path(), uuid);
+        let wal_path = {
+            let mut entries = fs::read_dir(host_dir.join(WAL_DIR))
+                .unwrap()
+                .collect::<Vec<_>>();
+            assert_eq!(entries.len(), 1);
+            entries.pop().unwrap().unwrap().path()
+        };
+        let pre_corruption_len = fs::metadata(&wal_path).unwrap().len();
+
+        // Phase 2: simulate WAL corruption - write a record-sized run of
+        // zeros (length header reads as 0, the exact prod symptom).
+        {
+            let mut f = OpenOptions::new().append(true).open(&wal_path).unwrap();
+            f.write_all(&[0u8; 40]).unwrap();
+            f.sync_all().unwrap();
+        }
+        assert_eq!(
+            fs::metadata(&wal_path).unwrap().len(),
+            pre_corruption_len + 40
+        );
+
+        // Phase 3: reopen the writer. Recovery must drop the corrupt tail,
+        // shrink the WAL back to the clean size, and let new appends succeed.
+        let w = HostWriter::open(dir.path(), uuid, 30, 60).unwrap();
+        assert_eq!(fs::metadata(&wal_path).unwrap().len(), pre_corruption_len);
+
+        w.write_sample(40, slot(23.0)).unwrap();
+        w.write_sample(60, slot(24.0)).unwrap(); // seals window [0,60)
+        w.flush().unwrap();
+
+        // Across all sealed chunks we must see the two recovered samples
+        // (10, 20), the one written into the recovered window (40), and the
+        // one that crossed the boundary and triggered the seal (60).
+        let chunks_dir = host_dir.join(CHUNKS_DIR);
+        let mut all_ts: Vec<i64> = Vec::new();
+        for entry in fs::read_dir(&chunks_dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().and_then(|e| e.to_str()) != Some("zst") {
+                continue;
+            }
+            let bytes = fs::read(&path).unwrap();
+            for (ts, _) in crate::hzc::chunk::decode_chunk(&bytes).unwrap() {
+                all_ts.push(ts);
+            }
+        }
+        all_ts.sort_unstable();
+        assert_eq!(
+            all_ts,
+            vec![10, 20, 40, 60],
+            "expected all four samples to survive recovery + new appends"
+        );
     }
 
     #[test]

@@ -3,7 +3,7 @@
 // to a reactive counter so any open page that depends on that domain
 // re-fetches via its own `$effect` block.
 //
-// Lifecycle: `connectEvents()` is idempotent — call it whenever the user
+// Lifecycle: `connectEvents()` is idempotent - call it whenever the user
 // becomes authenticated. `disconnectEvents()` closes the stream (logout).
 //
 // Session revocation: EventSource closes (readyState → CLOSED) on any
@@ -82,7 +82,7 @@ export function connectEvents() {
         bumpAll();
         break;
       default:
-        // Unknown kind — be lenient, refetch everything rather than miss a
+        // Unknown kind - be lenient, refetch everything rather than miss a
         // forward-compatible push from a newer server.
         bumpAll();
         break;
@@ -90,7 +90,7 @@ export function connectEvents() {
   });
   source.addEventListener('error', () => {
     if (intentionalClose) return;
-    // CLOSED is terminal — EventSource only enters it on non-2xx responses
+    // CLOSED is terminal - EventSource only enters it on non-2xx responses
     // (including 401 when the session has been revoked, or 429 when an
     // anonymous IP hits the per-IP SSE cap) or when we asked it to close.
     // Transient network blips leave readyState in CONNECTING, so we don't
@@ -104,7 +104,7 @@ export function connectEvents() {
 }
 
 // EventSource hides the HTTP status code, so to distinguish "session
-// revoked" (401 — log out) from "anonymous IP cap hit" (429 — wait and
+// revoked" (401 - log out) from "anonymous IP cap hit" (429 - wait and
 // reconnect) we probe the same URL with a plain fetch. The probe is one
 // extra request per disconnect and only fires on terminal close; the cost
 // is acceptable given the alternative is either spamming the limiter via
@@ -131,7 +131,7 @@ async function handleTerminalClose() {
       // ignore
     }
   } catch {
-    // Network down — treat as unauthorized so the user lands on /login
+    // Network down - treat as unauthorized so the user lands on /login
     // rather than a half-broken authenticated page.
   }
   if (status === 429) {

@@ -422,7 +422,7 @@ pub async fn run(cfg: Config) -> Result<()> {
     };
 
     // 64 slots is enough headroom for bursty mutations (multi-host imports,
-    // alert state churn) without keeping much memory around — receivers
+    // alert state churn) without keeping much memory around - receivers
     // that lag past 64 events get a single "refetch all" notice and
     // continue. The actual values are tiny (`ChangeKind` is a copy enum).
     let (events_tx, _) = tokio::sync::broadcast::channel(64);
@@ -567,7 +567,7 @@ async fn shutdown_signal(shutdown: Arc<tokio::sync::Notify>) {
         }
     };
     // PID 1 in distroless: Docker/Kubernetes deliver SIGTERM on `stop` and
-    // graceful shutdown — without this arm haze would ignore it and get
+    // graceful shutdown - without this arm haze would ignore it and get
     // hard-killed at the grace timeout. If we ever spawn child processes,
     // PID 1 will also need a SIGCHLD reaper (or `tini` in the Dockerfile).
     tokio::select! {
@@ -577,7 +577,7 @@ async fn shutdown_signal(shutdown: Arc<tokio::sync::Notify>) {
     // Wake every long-lived response handler (SSE) before axum starts its
     // drain. Without this, an idle browser tab's `/events` connection
     // holds the response stream open forever and axum::serve never
-    // returns — Ctrl-C "stalls" for the user.
+    // returns - Ctrl-C "stalls" for the user.
     shutdown.notify_waiters();
 }
 

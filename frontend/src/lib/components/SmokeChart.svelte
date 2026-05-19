@@ -4,13 +4,15 @@
   import { onDestroy, onMount } from 'svelte';
   import type { SeriesResp } from '$lib/api';
   import { startViewportTracking, viewport } from '$lib/viewport.svelte';
+  import { currentTimeZone, fmt, partsInZone, tzPref } from '$lib/timezone.svelte';
 
   let {
     series,
     height = 220,
     onZoom,
     xMin,
-    xMax
+    xMax,
+    title
   }: {
     series: SeriesResp;
     height?: number;
@@ -24,7 +26,16 @@
      */
     xMin?: number;
     xMax?: number;
+    /**
+     * Label drawn at the top of the PNG produced by the copy-to-clipboard
+     * button. Not shown anywhere in the live UI - parents already render
+     * their own headers. Typical content: `"6 hours"`, `"my-host · 30m"`.
+     */
+    title?: string;
   } = $props();
+
+  let copyState = $state<'idle' | 'copied' | 'error'>('idle');
+  let copyResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   let container: HTMLDivElement | undefined = $state();
   let wrapper: HTMLDivElement | undefined = $state();
@@ -55,21 +66,21 @@
   // synthesise mouse drag events from touch, so on mobile we drive the
   // gestures ourselves with pointer events:
   //
-  // - 'pending'  — finger is down; we're waiting to see if it becomes a
+  // - 'pending'  - finger is down; we're waiting to see if it becomes a
   //                tap, long-press, or drag. Tooltip suppressed.
-  // - 'tooltip'  — held still for ~400 ms; tooltip appears and follows
+  // - 'tooltip'  - held still for ~400 ms; tooltip appears and follows
   //                the finger horizontally. Page scrolls if user slides
   //                vertically (handled by touch-action: pan-y below).
-  // - 'drag'     — moved past the threshold before long-press; we draw
+  // - 'drag'     - moved past the threshold before long-press; we draw
   //                a horizontal selection band and zoom to it on release.
-  // - 'idle'     — nothing pressed. Tooltip from the previous gesture
+  // - 'idle'     - nothing pressed. Tooltip from the previous gesture
   //                stays visible until the next pointerdown.
   //
   // A quick tap (released < long-press, < threshold movement) checks the
   // double-tap window: two taps within 300 ms / 30 px → zoom out.
   type TouchState = 'idle' | 'pending' | 'tooltip' | 'drag';
   // $state so the SmokeChart effects below can gate live-mode redraws on
-  // it — without that, a 1 s live tick from the parent host page shifts
+  // it - without that, a 1 s live tick from the parent host page shifts
   // the chart's x-scale out from under the user's finger mid-drag and
   // the zoom-to-band on release lands on the wrong time range.
   let touchState = $state<TouchState>('idle');
@@ -102,21 +113,14 @@
     };
   });
 
-  // Locale-aware date formatters.
-  const fmtDayMonth = new Intl.DateTimeFormat(undefined, {
-    day: 'numeric',
-    month: 'short'
-  });
-  const fmtMonthYear = new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    year: 'numeric'
-  });
-  const fmtYear = new Intl.DateTimeFormat(undefined, { year: 'numeric' });
-  const fmtTooltipDate = new Intl.DateTimeFormat(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric'
-  });
+  // Locale-and-timezone-aware date formatters. Each call honours the user's
+  // current timezone preference from `$lib/timezone.svelte` - read fresh on
+  // every invocation so a tz change just needs `plot.redraw()`, no rebuild.
+  const fmtDayMonth = (secs: number) => fmt(secs, { day: 'numeric', month: 'short' });
+  const fmtMonthYear = (secs: number) => fmt(secs, { month: 'short', year: 'numeric' });
+  const fmtYear = (secs: number) => fmt(secs, { year: 'numeric' });
+  const fmtTooltipDate = (secs: number) =>
+    fmt(secs, { day: 'numeric', month: 'short', year: 'numeric' });
 
   const LOSS_PALETTE: readonly string[] = [
     '#00cc00', '#00b1ff', '#5959ff', '#b300b3',
@@ -205,23 +209,33 @@
       ctx.fillStyle = withAlpha(fill, alpha);
       type Pt = { idx: number; x: number; low: number; high: number };
       let chain: Pt[] = [];
-      // At a chain endpoint (last reachable before an unreachable run, or
-      // first after) we extend to the midpoint with the actual neighbour
-      // data point rather than the conservative ±halfBucket. That makes
-      // the band meet the unreachable rect exactly even when the data is
-      // non-uniformly spaced (e.g. probe slipped a beat around the
-      // outage). Only at the absolute start/end of the data array does
-      // the halfBucket fallback apply.
+      // Threshold for "this is a real gap in the data, not just non-uniform
+      // probe spacing". 1.5× resolution catches one missed period; anything
+      // larger means the probe loop wasn't writing samples and the chain
+      // must break visually rather than connect across the gap.
+      const gapThreshold = getResolutionSecs() * 1.5;
+      // At a chain endpoint we extend to the midpoint with the actual
+      // neighbour data point so the band meets adjacent unreachable rects
+      // or chains exactly even when the data is non-uniformly spaced. BUT
+      // when the neighbour is across a real gap (> gapThreshold) we fall
+      // back to ±halfBucket so the polygon ends where the data ends instead
+      // of bleeding across the gap to meet the next chain at its midpoint.
       const leftEdgeX = (k: number, arr: Pt[]) => {
         const p = arr[k];
         if (k > 0) return (arr[k - 1].x + p.x) / 2;
-        if (p.idx > 0) return (xs[p.idx - 1] + p.x) / 2;
+        if (p.idx > 0) {
+          const prevX = xs[p.idx - 1];
+          if (p.x - prevX <= gapThreshold) return (prevX + p.x) / 2;
+        }
         return p.x - halfBucket;
       };
       const rightEdgeX = (k: number, arr: Pt[]) => {
         const p = arr[k];
         if (k < arr.length - 1) return (p.x + arr[k + 1].x) / 2;
-        if (p.idx < xs.length - 1) return (p.x + xs[p.idx + 1]) / 2;
+        if (p.idx < xs.length - 1) {
+          const nextX = xs[p.idx + 1];
+          if (nextX - p.x <= gapThreshold) return (p.x + nextX) / 2;
+        }
         return p.x + halfBucket;
       };
       const drawPolygon = (arr: Pt[]) => {
@@ -258,6 +272,10 @@
         const lo = lows[i];
         const hi = highs[i];
         if (lo != null && hi != null) {
+          const last = chain.length ? chain[chain.length - 1] : null;
+          if (last && xs[i] - last.x > gapThreshold) {
+            flush();
+          }
           chain.push({ idx: i, x: xs[i], low: lo, high: hi });
         } else if (isUnreachable(losses[i])) {
           flush();
@@ -282,20 +300,27 @@
       ctx.lineJoin = 'miter';
       type Pt = { idx: number; x: number; y: number };
       let chain: Pt[] = [];
-      // Same logic as bandDrawer: chain endpoints meet the unreachable
-      // rect's edge (midpoint to the neighbouring data point in xs)
-      // rather than falling back to ±halfBucket, which left a visible
-      // gap when probe spacing was non-uniform around an outage.
+      // Same logic as bandDrawer: chain endpoints meet the neighbour at the
+      // midpoint when spacing is normal, but fall back to ±halfBucket when
+      // the neighbour is across a real gap (> gapThreshold) so the line
+      // ends where the data ends instead of bleeding into the gap.
+      const gapThreshold = getResolutionSecs() * 1.5;
       const leftEdgeX = (k: number, arr: Pt[]) => {
         const p = arr[k];
         if (k > 0) return (arr[k - 1].x + p.x) / 2;
-        if (p.idx > 0) return (xs[p.idx - 1] + p.x) / 2;
+        if (p.idx > 0) {
+          const prevX = xs[p.idx - 1];
+          if (p.x - prevX <= gapThreshold) return (prevX + p.x) / 2;
+        }
         return p.x - halfBucket;
       };
       const rightEdgeX = (k: number, arr: Pt[]) => {
         const p = arr[k];
         if (k < arr.length - 1) return (p.x + arr[k + 1].x) / 2;
-        if (p.idx < xs.length - 1) return (p.x + xs[p.idx + 1]) / 2;
+        if (p.idx < xs.length - 1) {
+          const nextX = xs[p.idx + 1];
+          if (nextX - p.x <= gapThreshold) return (p.x + nextX) / 2;
+        }
         return p.x + halfBucket;
       };
       const drawChain = (arr: Pt[]) => {
@@ -337,6 +362,10 @@
         if (v == null) {
           if (isUnreachable(losses[i])) flush();
           continue;
+        }
+        const last = chain.length ? chain[chain.length - 1] : null;
+        if (last && xs[i] - last.x > gapThreshold) {
+          flush();
         }
         chain.push({ idx: i, x: xs[i], y: v });
       }
@@ -517,7 +546,7 @@
     }
 
     if (prev === 'pending' && touchStartPos) {
-      // Quick tap — possibly the second tap of a double-tap.
+      // Quick tap - possibly the second tap of a double-tap.
       const now = performance.now();
       if (lastTapPos && now - lastTapTime < DOUBLE_TAP_MS) {
         const ddx = touchStartPos.x - lastTapPos.x;
@@ -555,10 +584,10 @@
   }
 
   function formatTipTimestamp(secs: number): string {
-    const d = new Date(secs * 1000);
-    const hh = d.getHours().toString().padStart(2, '0');
-    const mm = d.getMinutes().toString().padStart(2, '0');
-    return `${hh}:${mm} · ${fmtTooltipDate.format(d)}`;
+    const p = partsInZone(secs);
+    const hh = p.hour.toString().padStart(2, '0');
+    const mm = p.minute.toString().padStart(2, '0');
+    return `${hh}:${mm} · ${fmtTooltipDate(secs)}`;
   }
 
   type StatRow = { avg: number; max: number; min: number; now: number; sd: number };
@@ -651,20 +680,22 @@
           size: 72,
           values: (_u, splits, _axisIdx, _foundSpace, foundIncr) =>
             splits.map((secs) => {
-              const d = new Date(secs * 1000);
-              if (foundIncr >= 365 * 86400) return fmtYear.format(d);
-              if (foundIncr >= 28 * 86400) return fmtMonthYear.format(d);
-              if (foundIncr >= 86400) return fmtDayMonth.format(d);
-              const isMidnight =
-                d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0;
-              if (isMidnight) return fmtDayMonth.format(d);
-              const hh = d.getHours().toString().padStart(2, '0');
-              const mm = d.getMinutes().toString().padStart(2, '0');
+              if (foundIncr >= 365 * 86400) return fmtYear(secs);
+              if (foundIncr >= 28 * 86400) return fmtMonthYear(secs);
+              if (foundIncr >= 86400) return fmtDayMonth(secs);
+              // Hour/minute/second pulled in the configured zone, not the
+              // browser default - otherwise a viewer in another zone would
+              // see the wrong "midnight" marker.
+              const p = partsInZone(secs);
+              const isMidnight = p.hour === 0 && p.minute === 0 && p.second === 0;
+              if (isMidnight) return fmtDayMonth(secs);
+              const hh = p.hour.toString().padStart(2, '0');
+              const mm = p.minute.toString().padStart(2, '0');
               // Sub-minute zoom: tick spacing finer than 1 min means the
               // seconds digits are what's actually changing between ticks.
               // Switch to HH:MM:SS so adjacent labels aren't identical.
               if (foundIncr < 60) {
-                const ss = d.getSeconds().toString().padStart(2, '0');
+                const ss = p.second.toString().padStart(2, '0');
                 return `${hh}:${mm}:${ss}`;
               }
               return `${hh}:${mm}`;
@@ -700,7 +731,7 @@
         setCursor: [
           (u) => {
             // Suppress the tooltip while a touch is pending or actively
-            // dragging — quick taps and pinch-zoom hand-offs should NOT
+            // dragging - quick taps and pinch-zoom hand-offs should NOT
             // flash the tooltip just because uPlot moved the cursor.
             if (touchState === 'pending' || touchState === 'drag') {
               tip.visible = false;
@@ -786,7 +817,7 @@
     if (!container) return;
     const data = pack(series);
     if (plot) {
-      // Skip live-refresh redraws while the user is mid-touch — the
+      // Skip live-refresh redraws while the user is mid-touch - the
       // setData/setScale combo refits the visible window and ruins
       // in-flight zoom gestures. Once touchState flips back to 'idle'
       // the effect re-runs and applies the latest data.
@@ -816,12 +847,21 @@
     return () => ro.disconnect();
   });
 
+  // Redraw when the user picks a different timezone. Axis labels and
+  // tooltips read the current tz lazily, but uPlot caches the rendered
+  // axes - a redraw makes it re-call our `values` callback.
+  $effect(() => {
+    // Touch the reactive state so the effect re-runs on change.
+    void tzPref.value;
+    if (plot && touchState === 'idle') plot.redraw();
+  });
+
   $effect(() => {
     const min = xMin;
     const max = xMax;
     if (!plot || min == null || max == null) return;
     if (min === lastXMin && max === lastXMax) return;
-    // Same touchState gate — don't shift the scale under a finger.
+    // Same touchState gate - don't shift the scale under a finger.
     if (touchState !== 'idle') return;
     plot.setScale('x', { min, max });
     lastXMin = min;
@@ -831,7 +871,125 @@
   onDestroy(() => {
     plot?.destroy();
     plot = null;
+    if (copyResetTimer) clearTimeout(copyResetTimer);
   });
+
+  // Compose the chart + stats footer (and optional title) into a single PNG
+  // and write it to the system clipboard. The composition is hand-drawn on
+  // a fresh canvas rather than rasterising the DOM - keeps output crisp and
+  // avoids pulling in html2canvas just for one button.
+  async function copyChartAsPng() {
+    if (!plot) return;
+    const src = plot.ctx.canvas;
+    const dpr = window.devicePixelRatio || 1;
+    const pad = Math.round(12 * dpr);
+    const titleSize = Math.round(13 * dpr);
+    const titleBlock = titleSize + Math.round(8 * dpr);
+    const statsSize = Math.round(12 * dpr);
+    const statsLineHeight = Math.round(18 * dpr);
+    const statsBlock = 2 * statsLineHeight;
+
+    const outW = src.width + 2 * pad;
+    const outH = pad + titleBlock + src.height + Math.round(10 * dpr) + statsBlock + pad;
+
+    const out = document.createElement('canvas');
+    out.width = outW;
+    out.height = outH;
+    const ctx = out.getContext('2d');
+    if (!ctx) return;
+
+    const bg = cssVar('--bg', '#ffffff');
+    const fg = cssVar('--fg', '#0b0d10');
+    const muted = cssVar('--muted', '#6b7480');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, outW, outH);
+
+    // Always include the actual time window in the title - preset labels
+    // ("30m", "6 hours") don't survive outside the app and lose meaning the
+    // moment the PNG is pasted elsewhere. Pull from the parent's pinned
+    // axis bounds if provided, otherwise the series response itself.
+    const fromSec = xMin ?? series.from;
+    const toSec = xMax ?? series.to;
+    const fullStamp = (secs: number) =>
+      fmt(secs, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      });
+    const range = `${fullStamp(fromSec)} → ${fullStamp(toSec)}`;
+    const headerText = title ? `${title} · ${range}` : range;
+
+    let y = pad;
+    ctx.fillStyle = muted;
+    ctx.font = `${titleSize}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.textBaseline = 'top';
+    ctx.fillText(headerText, pad, y);
+    y += titleBlock;
+
+    ctx.drawImage(src, pad, y);
+    y += src.height + Math.round(10 * dpr);
+
+    // Stats lines. Mirrors the on-screen footer: label in bold-ish fg,
+    // then alternating value (fg) + unit-tag (muted) pairs.
+    const monoFont = `${statsSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    const monoBold = `bold ${statsSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    const gap = Math.round(8 * dpr);
+    const innerGap = Math.round(4 * dpr);
+    const drawStats = (label: string, fields: Array<[string, string]>) => {
+      let x = pad;
+      ctx.font = monoBold;
+      ctx.fillStyle = fg;
+      ctx.fillText(label, x, y);
+      x += ctx.measureText(label).width + gap;
+      ctx.font = monoFont;
+      for (const [v, k] of fields) {
+        ctx.fillStyle = fg;
+        ctx.fillText(v, x, y);
+        x += ctx.measureText(v).width + innerGap;
+        ctx.fillStyle = muted;
+        ctx.fillText(k, x, y);
+        x += ctx.measureText(k).width + gap;
+      }
+      y += statsLineHeight;
+    };
+    drawStats('median rtt:', [
+      [formatMs(medianStats?.avg ?? null), 'avg'],
+      [formatMs(medianStats?.max ?? null), 'max'],
+      [formatMs(medianStats?.min ?? null), 'min'],
+      [formatMs(medianStats?.now ?? null), 'now'],
+      [formatMs(medianStats?.sd ?? null), 'sd']
+    ]);
+    drawStats('packet loss:', [
+      [formatLoss(lossStats?.avg ?? null), 'avg'],
+      [formatLoss(lossStats?.max ?? null), 'max'],
+      [formatLoss(lossStats?.min ?? null), 'min'],
+      [formatLoss(lossStats?.now ?? null), 'now']
+    ]);
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      out.toBlob((b) => resolve(b), 'image/png')
+    );
+    if (!blob) {
+      flashCopyState('error');
+      return;
+    }
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      flashCopyState('copied');
+    } catch {
+      flashCopyState('error');
+    }
+  }
+
+  function flashCopyState(s: 'copied' | 'error') {
+    copyState = s;
+    if (copyResetTimer) clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(() => (copyState = 'idle'), 1500);
+  }
 </script>
 
 <div class="w-full">
@@ -843,6 +1001,27 @@
     role="presentation"
   >
     <div bind:this={container} class="w-full h-full overflow-hidden"></div>
+    <!-- Copy-to-clipboard button. Top-right of the chart area so it doesn't
+         compete with the parent's own header. Pointer-events scoped to the
+         button itself (the wrapper is interactive but absolute positioning
+         here leaves it click-targetable). -->
+    <button
+      type="button"
+      class="absolute top-1 right-1 z-10 rounded p-1 transition-opacity"
+      style="background: var(--bg); border: 1px solid var(--border); color: {copyState === 'copied' ? 'var(--latency-good, #00cc00)' : copyState === 'error' ? 'var(--latency-bad)' : 'var(--muted)'}; opacity: {copyState === 'idle' ? 0.6 : 1}; cursor: pointer"
+      onclick={(e) => {
+        e.stopPropagation();
+        void copyChartAsPng();
+      }}
+      title={copyState === 'copied' ? 'Copied!' : copyState === 'error' ? 'Copy failed' : 'Copy chart as PNG'}
+      aria-label="Copy chart as PNG"
+    >
+      {#if copyState === 'copied'}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+      {:else}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      {/if}
+    </button>
     <!-- Touch-mode drag-to-zoom selection band. uPlot's built-in drag is
          mouse-only, so on touch we paint our own translucent band from
          the press position to the current finger position and call

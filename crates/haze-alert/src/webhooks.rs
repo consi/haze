@@ -1,6 +1,6 @@
 //! Webhook delivery: long-lived reqwest client + JSON POST helper.
 //!
-//! Failures are logged and swallowed — a 5xx from the receiver should not
+//! Failures are logged and swallowed - a 5xx from the receiver should not
 //! crash the eval loop. The receiver is expected to be idempotent
 //! (transitions are persisted before the POST goes out, so a duplicate
 //! delivery is a re-notification of the same state, not a logical glitch).

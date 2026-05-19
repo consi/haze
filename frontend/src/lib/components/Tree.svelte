@@ -22,6 +22,14 @@
     onEditHost?: (h: Host) => void;
   } = $props();
 
+  // Tree rows are narrow - anything past ~25 chars wraps or shoves the
+  // probe-kind badge off the row. Truncate with an ellipsis and keep the
+  // full name available on hover via the `title` attribute.
+  const NAME_LIMIT = 25;
+  function truncateName(s: string): string {
+    return s.length > NAME_LIMIT ? s.slice(0, NAME_LIMIT) + '…' : s;
+  }
+
   type Node = {
     group: Group;
     children: Node[];
@@ -173,8 +181,9 @@
       type="button"
       onclick={() => pickHost(host.uuid)}
       class="flex-1 text-left"
+      title={host.display_name}
     >
-      {host.display_name}
+      {truncateName(host.display_name)}
     </button>
     {#if onEditHost}
       {@render editPencil(() => onEditHost?.(host), `Edit ${host.display_name}`)}
@@ -211,8 +220,9 @@
         onclick={() => pickGroup(node.group.uuid)}
         class="flex-1 text-left font-medium"
         style="color: var(--fg)"
+        title={node.group.display_name}
       >
-        {node.group.display_name}
+        {truncateName(node.group.display_name)}
       </button>
       {#if onEditGroup}
         {@render editPencil(() => onEditGroup?.(node.group), `Edit ${node.group.display_name}`)}

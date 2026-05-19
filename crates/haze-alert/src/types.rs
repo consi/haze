@@ -200,8 +200,8 @@ impl Severity {
 ///
 /// `Threshold` is the normal case (value crossed warning/critical, or
 /// returned to ok). `MatchLost` means the host-rule pairing no longer
-/// exists — host was removed from a targeted group, the rule's targets
-/// were edited, or the rule was disabled — so any firing state for that
+/// exists - host was removed from a targeted group, the rule's targets
+/// were edited, or the rule was disabled - so any firing state for that
 /// pair is being cleared.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]

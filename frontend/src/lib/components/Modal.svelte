@@ -27,12 +27,12 @@
 
   // Track where the press started. A drag whose mousedown lands inside the
   // dialog (e.g. selecting text inside a number input) but whose mouseup
-  // happens on the backdrop fires a `click` on the common ancestor — the
-  // backdrop — with `e.target === e.currentTarget`. Without remembering the
+  // happens on the backdrop fires a `click` on the common ancestor - the
+  // backdrop - with `e.target === e.currentTarget`. Without remembering the
   // press origin we'd close the modal on every such drag. We close only
   // when *both* ends of the click are on the backdrop itself.
   //
-  // On mobile we don't dismiss on backdrop at all — the dialog goes
+  // On mobile we don't dismiss on backdrop at all - the dialog goes
   // full-screen so any stray touch on the "backdrop" is actually a
   // user trying to scroll the dialog body. The X button is the only
   // explicit dismissal there.

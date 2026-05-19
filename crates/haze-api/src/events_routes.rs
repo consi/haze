@@ -1,4 +1,4 @@
-//! /api/v1/events — Server-Sent Events stream that pushes domain-change
+//! /api/v1/events - Server-Sent Events stream that pushes domain-change
 //! notifications to authenticated browser sessions.
 //!
 //! The wire format is one `event: change` per push, with the kind name as
@@ -45,12 +45,12 @@ use crate::{error::ApiError, middleware::ViewerAccess, rate_limit::SseGuard, sta
 ///
 /// Granular enough that the alerting page doesn't refetch when a host
 /// changes, but coarse enough that we don't have to ship per-entity diffs
-/// over the wire — the client just re-issues whatever list query it
+/// over the wire - the client just re-issues whatever list query it
 /// already uses.
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChangeKind {
-    /// Group or host CRUD — anything that affects the sidebar tree.
+    /// Group or host CRUD - anything that affects the sidebar tree.
     Tree,
     /// Alert rule CRUD or state transitions.
     Alerts,
@@ -78,7 +78,7 @@ pub fn router() -> Router<AppState> {
     Router::new().route("/", get(stream))
 }
 
-/// `GET /api/v1/events` — subscribe to domain-change pushes.
+/// `GET /api/v1/events` - subscribe to domain-change pushes.
 ///
 /// Returns a typed `Response` rather than `Sse<…>` directly so we can
 /// reject anonymous clients that exceed the per-IP SSE concurrency cap
@@ -88,7 +88,7 @@ async fn stream(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
 ) -> Result<Response, ApiError> {
-    // Only enforce the per-IP SSE cap on anonymous connections —
+    // Only enforce the per-IP SSE cap on anonymous connections -
     // authenticated users have explicit accounts, so the limit would
     // mostly punish multi-tab operators. The cap exists to stop a public
     // attacker pinning thousands of broadcast subscribers open.
@@ -111,7 +111,7 @@ async fn stream(
     // One receiver per connection. `broadcast` drops old events for slow
     // receivers (the `Lagged` variant); we surface that to the client as a
     // generic "refetch everything" signal rather than tearing down the
-    // stream — refetch is idempotent.
+    // stream - refetch is idempotent.
     let rx = state.events.subscribe();
     let shutdown = state.shutdown;
     // The `shutdown` arm is critical: without it `recv().await` parks

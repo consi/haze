@@ -48,7 +48,7 @@ pub(crate) struct UpdateStorageSettingsReq {
 )]
 pub(crate) async fn get_storage(
     // ViewerAccess so anonymous public-mode visitors can read the retention
-    // tiers — the host and group detail pages use them to compute the
+    // tiers - the host and group detail pages use them to compute the
     // "max" preset's lower bound on smoke charts. The data is policy, not
     // sample content, so it's safe to expose to viewers.
     _viewer: ViewerAccess,

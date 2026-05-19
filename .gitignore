@@ -36,3 +36,4 @@
 core.*
 Thumbs.db
 /.cargo-docker/
+/.cargo-cache/

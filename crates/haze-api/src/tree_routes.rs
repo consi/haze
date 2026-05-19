@@ -1,4 +1,4 @@
-//! /api/v1/tree — single round-trip that returns every group and every
+//! /api/v1/tree - single round-trip that returns every group and every
 //! host the user can see. Frontend sidebar uses this instead of the
 //! two-call `listGroups()` + `listHosts()` dance so a tree reload after a
 //! mutation is one HTTP request rather than two.

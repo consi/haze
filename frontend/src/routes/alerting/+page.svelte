@@ -13,6 +13,7 @@
   import { reloadKeys } from '$lib/events.svelte';
   import AlertRuleModal from '$lib/components/AlertRuleModal.svelte';
   import Forbidden from '$lib/components/Forbidden.svelte';
+  import { fmtDateTime } from '$lib/timezone.svelte';
   import { onMount, onDestroy } from 'svelte';
 
   let rules = $state<AlertRule[]>([]);
@@ -89,7 +90,7 @@
   // SSE-driven refresh. Rules and webhook names come from full `refresh()`;
   // tree changes (groups/hosts) only affect label rendering for the rule
   // target column, so the same path is fine. Alert *states* keep their
-  // 5 s poll — those flip on backend evaluation cycles, not on a user
+  // 5 s poll - those flip on backend evaluation cycles, not on a user
   // mutation, and the SSE channel doesn't carry state-transition events.
   $effect(() => {
     void reloadKeys.alerts;
@@ -159,7 +160,7 @@
   // floats get up to 3 significant digits so "312.4" doesn't render as
   // "312.40000000000001" after the f32 → f64 widening in transit.
   function formatValue(v: number): string {
-    if (!Number.isFinite(v)) return '—';
+    if (!Number.isFinite(v)) return '-';
     if (Number.isInteger(v)) return v.toString();
     return v.toFixed(Math.abs(v) >= 100 ? 1 : Math.abs(v) >= 10 ? 2 : 3);
   }
@@ -187,7 +188,7 @@
   }
 
   function webhookSummary(rule: AlertRule): string {
-    if (rule.webhook_uuids.length === 0) return '—';
+    if (rule.webhook_uuids.length === 0) return '-';
     if (webhooks.length === 0) return `${rule.webhook_uuids.length}`;
     const names = rule.webhook_uuids
       .map((u) => webhooks.find((w) => w.uuid === u)?.name ?? u.slice(0, 6))
@@ -424,11 +425,11 @@
                     {:else if s.last_value != null}
                       <span>{formatValue(s.last_value)}</span>
                     {:else}
-                      <span style="color: var(--muted)">—</span>
+                      <span style="color: var(--muted)">-</span>
                     {/if}
                   </td>
                   <td class="py-1 px-2" style="color: var(--muted)">
-                    {new Date(s.since * 1000).toLocaleString()}
+                    {fmtDateTime(s.since)}
                   </td>
                 </tr>
               {/each}

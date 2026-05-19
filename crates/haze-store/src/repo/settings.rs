@@ -339,7 +339,7 @@ pub async fn set_host_defaults(
 ///
 /// When `enabled`, anonymous browsers can view the tree, group/host
 /// details, and host series via `/api/v1/{tree,groups,hosts,events}`.
-/// Write endpoints are unaffected — they still demand an authenticated
+/// Write endpoints are unaffected - they still demand an authenticated
 /// `CurrentUser`. The per-IP token-bucket sizes throttle anonymous
 /// traffic only; authenticated requests bypass the limiter entirely.
 ///

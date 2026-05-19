@@ -174,7 +174,7 @@
     return score;
   }
 
-  // Groups come first — alerting on a group is the common case (one rule
+  // Groups come first - alerting on a group is the common case (one rule
   // covers everything underneath it), so putting them at the top makes
   // the keyboard-only flow (focus, type, Enter) pick a group by default.
   const targetSuggestions = $derived.by<TargetSuggestion[]>(() => {
@@ -216,7 +216,7 @@
     targets = [...targets, { kind: s.kind, uuid: s.uuid }];
     targetSearch = '';
     // Keep the picker open so the user can keep typing and adding more.
-    // We can't just call focus() to re-trigger onfocus — the input is
+    // We can't just call focus() to re-trigger onfocus - the input is
     // already focused (the suggestion button's onmousedown preventDefault
     // keeps it that way), so onfocus wouldn't fire.
     targetPickerOpen = true;

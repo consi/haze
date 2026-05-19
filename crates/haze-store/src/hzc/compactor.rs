@@ -172,7 +172,7 @@ pub fn compact_in_dir(
             agg_start,
             agg_end,
             target_res,
-            0, // generation 0 — downsampler emits per-tier chunks; daily rollup re-bundles them later.
+            0, // generation 0 - downsampler emits per-tier chunks; daily rollup re-bundles them later.
             &aggregated,
         )?;
         report.aggregated_chunks += 1;
@@ -306,7 +306,7 @@ pub fn migrate_and_verify_in_dir(host_dir: &Path) -> Result<MigrationReport, Hzc
             }
         }
 
-        // Parse to extract seq/res/start/end — the legacy filename's
+        // Parse to extract seq/res/start/end - the legacy filename's
         // grammar guarantees this succeeds because `is_legacy_chunk_name`
         // already vetted it.
         let Ok(cr) = parse_chunk_filename(&path) else {
@@ -357,7 +357,7 @@ pub fn rollup_settled_days_in_dir(
     }
 
     // Seed `next_seq` once before the loop. Each bundle bumps it locally and
-    // we re-derive only if we run out of safety distance (we won't — every
+    // we re-derive only if we run out of safety distance (we won't - every
     // bundled seq is strictly greater than every on-disk seq at the moment
     // we observed them).
     let mut next_seq = groups
@@ -408,7 +408,7 @@ pub fn rollup_settled_days_in_dir(
         }
 
         if srcs.len() <= 1 {
-            // Nothing to gain — either zero or one chunk; bundling produces
+            // Nothing to gain - either zero or one chunk; bundling produces
             // the same file count.
             report.skipped_singleton += 1;
             continue;
@@ -460,7 +460,7 @@ pub fn rollup_settled_days_in_dir(
 
         // Sort by timestamp; dedupe exact ts collisions (raw beats aggregated,
         // but we already grouped by resolution so this only matters if two
-        // chunks at the same resolution overlap — unusual but cheap to handle).
+        // chunks at the same resolution overlap - unusual but cheap to handle).
         samples.sort_by_key(|(ts, _)| *ts);
         samples.dedup_by(|a, b| a.0 == b.0);
 
@@ -474,7 +474,7 @@ pub fn rollup_settled_days_in_dir(
             day_start_ts,
             day_end_ts,
             res_secs,
-            1, // generation 1 — daily bundle
+            1, // generation 1 - daily bundle
             &samples,
         ) {
             tracing::warn!(
@@ -635,7 +635,7 @@ mod tests {
 
     #[test]
     fn rollup_bundles_a_settled_day_into_one_chunk() {
-        // Day D at the UNIX epoch (Jan 1 1970) — start_ts 0, end_ts 86_400.
+        // Day D at the UNIX epoch (Jan 1 1970) - start_ts 0, end_ts 86_400.
         // Writer emits 60-second-window chunks so a full day = 1 440 chunks.
         let dir = TempDir::new().unwrap();
         let uuid = Uuid::new_v4();
@@ -930,7 +930,7 @@ mod tests {
         assert!(host_dir.join("wal").join("25.wal").exists());
 
         // Rollup with now ≥ day 0's settle horizon. Bundle is allocated as
-        // seq=max(1..24)+1=25 — same seq the live WAL is using.
+        // seq=max(1..24)+1=25 - same seq the live WAL is using.
         let now = 86_400 + 25 * 3_600;
         let report = rollup_settled_days_in_dir(&host_dir, now, 3_600).unwrap();
         assert_eq!(report.bundled_days, 1);

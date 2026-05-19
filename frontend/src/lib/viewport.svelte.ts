@@ -21,7 +21,7 @@ let listener: ((e: MediaQueryListEvent) => void) | null = null;
 
 /**
  * Start the matchMedia listener. Safe to call from a component's onMount;
- * idempotent — repeated calls reuse the existing subscription.
+ * idempotent - repeated calls reuse the existing subscription.
  */
 export function startViewportTracking(): () => void {
   if (typeof window === 'undefined') return () => {};

@@ -29,7 +29,7 @@ struct Cli {
     origin: Option<String>,
 
     /// URL path prefix to deploy under, e.g. `/haze`. Empty/unset means
-    /// the app is served at root `/`. The prefix must be a path only —
+    /// the app is served at root `/`. The prefix must be a path only -
     /// scheme, host, query or fragment are rejected.
     #[arg(long, env = "HAZE_BASE_URL", default_value = "")]
     base_url: String,

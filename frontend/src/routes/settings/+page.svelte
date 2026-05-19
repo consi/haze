@@ -17,6 +17,13 @@
     type WorkerSettings
   } from '$lib/api';
   import { reloadKeys } from '$lib/events.svelte';
+  import {
+    browserTimeZone,
+    fmtDateTime,
+    listTimezones,
+    setTimezone,
+    tzPref
+  } from '$lib/timezone.svelte';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
 
@@ -311,7 +318,7 @@
 
   function fmtTs(ts: number | null | undefined): string {
     if (ts == null) return '-';
-    return new Date(ts * 1000).toLocaleString();
+    return fmtDateTime(ts);
   }
 
   // ─── Webhooks (alerting) ──────────────────────────────────────────────────
@@ -786,10 +793,10 @@
   // SSE-driven refresh per domain. Reading the counter inside the effect
   // wires the reactivity; the editor's local "currently being typed" state
   // sits in separate fields (`tiers`, `pools`, etc.) so a refresh while
-  // the user is mid-edit only re-pulls the server's view — it doesn't
+  // the user is mid-edit only re-pulls the server's view - it doesn't
   // stomp uncommitted edits. We deliberately only refetch users and
   // webhooks here; the settings sub-sections (storage/workers/alerting/
-  // host defaults) are write-only forms — a remote save by another admin
+  // host defaults) are write-only forms - a remote save by another admin
   // is rare enough that requiring a manual reload there is acceptable.
   $effect(() => {
     void reloadKeys.users;
@@ -801,12 +808,49 @@
   });
 </script>
 
+<div class="p-3 md:p-6 max-w-4xl space-y-6">
+  <h1 class="text-base font-semibold">Settings</h1>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       Display preferences (per-browser; signed-in roles only - anonymous
+       public-mode viewers always see browser-local time and don't get the
+       picker).
+       ════════════════════════════════════════════════════════════════════ -->
+  {#if auth.user}
+    <div class="space-y-2">
+      <h2 class="text-sm font-semibold uppercase tracking-wide" style="color: var(--muted)">
+        Display
+      </h2>
+      <section class="border rounded p-3" style="border-color: var(--border)">
+        <p class="text-[11px] mb-2" style="color: var(--muted)">
+          Stored in this browser only. Affects every timestamp in the UI -
+          chart axes, tooltips, alert "since" columns, the copy-as-PNG title,
+          and the host/group time-range pills.
+        </p>
+        <label class="block">
+          <span class="text-xs" style="color: var(--muted)">Timezone</span>
+          <select
+            class="w-full mt-0.5 px-2 py-1 rounded border text-xs"
+            style="border-color: var(--border); background: var(--bg); color: var(--fg)"
+            value={tzPref.value}
+            onchange={(e) => setTimezone((e.target as HTMLSelectElement).value)}
+          >
+            {#each listTimezones() as opt (opt.value)}
+              <option value={opt.value}>{opt.label}</option>
+            {/each}
+          </select>
+        </label>
+        <p class="text-[11px] mt-2" style="color: var(--muted)">
+          Detected browser zone: <code>{browserTimeZone()}</code>.
+          Sample now: <code>{fmtDateTime(Math.floor(Date.now() / 1000))}</code>.
+        </p>
+      </section>
+    </div>
+  {/if}
+
 {#if !canSeeSettings()}
   <Forbidden what="settings" />
 {:else}
-  <div class="p-3 md:p-6 max-w-4xl space-y-6">
-    <h1 class="text-base font-semibold">Settings</h1>
-
     <!-- ════════════════════════════════════════════════════════════════════
          User management
          ════════════════════════════════════════════════════════════════════ -->
@@ -1217,7 +1261,7 @@
 
             <div class="space-y-1">
               <div class="text-[10px] uppercase tracking-wider" style="color: var(--muted)">
-                Headers (optional — e.g. Authorization, X-API-Token)
+                Headers (optional - e.g. Authorization, X-API-Token)
               </div>
               {#each newWebhookHeaders as h, i (i)}
                 <div class="flex gap-1 items-center">
@@ -1881,7 +1925,6 @@
         {/if}
       </section>
     </div>
-  </div>
 
   {#if restarting}
     <div
@@ -1900,3 +1943,4 @@
     </div>
   {/if}
 {/if}
+</div>

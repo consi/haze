@@ -149,7 +149,7 @@ fn sha256(bytes: &[u8]) -> [u8; 32] {
 
 /// Build a `Set-Cookie` header value for a new session.
 ///
-/// `path` is the `Path=` attribute — typically the normalized
+/// `path` is the `Path=` attribute - typically the normalized
 /// `HAZE_BASE_URL` (e.g. `/haze`). Empty string is treated as `/` so the
 /// root-mode behaviour is byte-identical to the previous hard-coded value.
 ///
@@ -166,7 +166,7 @@ pub fn set_cookie(cookie_value: &str, path: &str, secure: bool) -> String {
 }
 
 /// Build a `Set-Cookie` header value that clears the session. The `Path`
-/// and `Secure` attributes must match what was used to set the cookie —
+/// and `Secure` attributes must match what was used to set the cookie -
 /// see [`set_cookie`].
 pub fn clear_cookie(path: &str, secure: bool) -> String {
     let p = if path.is_empty() { "/" } else { path };

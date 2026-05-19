@@ -24,7 +24,7 @@ use uuid::Uuid;
 
 /// How many times to retry a range read if a chunk disappears between
 /// `list_chunks` and `fs::read`. Each retry re-lists, re-filters, and starts
-/// over — a higher-generation bundle published mid-read will be preferred on
+/// over - a higher-generation bundle published mid-read will be preferred on
 /// the next pass.
 const READ_RETRY_LIMIT: u32 = 3;
 
@@ -91,7 +91,7 @@ pub fn read_range_in_dir(host_dir: &Path, from: i64, to: i64) -> Result<Vec<Samp
 
 fn try_read_range(host_dir: &Path, from: i64, to: i64) -> Result<Vec<Sample>, HzcError> {
     let chunks = list_chunks(host_dir)?;
-    // Only `g0` (per-window) chunks represent a sealed WAL — bundles take a
+    // Only `g0` (per-window) chunks represent a sealed WAL - bundles take a
     // fresh seq from a separate namespace, so a bundle's seq matching a live
     // WAL's seq does NOT mean the WAL is redundant. Skipping it would silently
     // drop the live writer's open chunk.
@@ -131,11 +131,12 @@ fn try_read_range(host_dir: &Path, from: i64, to: i64) -> Result<Vec<Sample>, Hz
     // since the first probe period.
     for wal_path in list_live_wals(host_dir, &chunk_seqs)? {
         // A corrupt or partially-written WAL shouldn't fail the whole query;
-        // the operator can still see all sealed chunks.
-        let Ok(records) = wal::replay(&wal_path) else {
+        // the operator can still see all sealed chunks. Reader doesn't
+        // truncate - the writer's open() path is responsible for that.
+        let Ok(outcome) = wal::replay(&wal_path) else {
             continue;
         };
-        for (ts, slot) in records {
+        for (ts, slot) in outcome.records {
             if ts >= from && ts < to {
                 out.push(Sample {
                     timestamp_secs: ts,
@@ -152,7 +153,7 @@ fn try_read_range(host_dir: &Path, from: i64, to: i64) -> Result<Vec<Sample>, Hz
 /// Drop chunks that are fully covered by a better-preferred chunk. Run twice:
 /// once preferring finer resolution, then preferring higher generation among
 /// equal-resolution chunks. The two predicates compose because each is
-/// strictly asymmetric — equal-preference chunks are never dropped against
+/// strictly asymmetric - equal-preference chunks are never dropped against
 /// each other.
 fn filter_by_coverage_preferences(chunks: Vec<ChunkRef>) -> Vec<ChunkRef> {
     let after_resolution = filter_by_coverage(chunks, |a, b| a.resolution_secs < b.resolution_secs);
@@ -375,7 +376,7 @@ mod tests {
     #[test]
     fn coverage_filter_prefers_finer_resolution_over_generation() {
         // A finer-resolution chunk should beat a coarser higher-generation one
-        // when they cover the same span. (The two passes are independent —
+        // when they cover the same span. (The two passes are independent -
         // resolution wins first, generation tiebreaks within a resolution.)
         let chunks = vec![
             cref(0, 86_400, 0, 0, 1),     // raw daily span

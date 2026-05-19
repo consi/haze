@@ -6,6 +6,7 @@
   import { api } from '$lib/api';
   import { auth } from '$lib/auth.svelte';
   import { reloadKeys, disconnectEvents } from '$lib/events.svelte';
+  import { fmtDateTime } from '$lib/timezone.svelte';
 
   // The /user page is self-service for an authenticated account; useless
   // without one. Public-mode visitors can reach this URL because the
@@ -41,7 +42,7 @@
       // The backend revokes all sessions on password change (it's the safe
       // default; see haze_auth::user::set_password_hash). Even though the
       // /api/v1/user/password route currently keeps the current session
-      // alive, an admin-initiated reset elsewhere would not — and we'd
+      // alive, an admin-initiated reset elsewhere would not - and we'd
       // rather force a single, predictable re-login path than have the
       // user discover staleness mid-action. Disconnect the SSE stream
       // ourselves so it doesn't race with the impending /login navigation.
@@ -171,7 +172,7 @@
 
   function fmtTs(ts: number | null | undefined): string {
     if (ts == null) return '-';
-    return new Date(ts * 1000).toLocaleString();
+    return fmtDateTime(ts);
   }
 
   onMount(async () => {

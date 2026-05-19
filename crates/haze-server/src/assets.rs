@@ -25,7 +25,7 @@ struct Assets;
 /// with its leading slash, so this is universally safe.
 ///
 /// Because the placeholder is baked into every emitted asset URL, the
-/// rewrite has to happen in root mode too — there we replace it with the
+/// rewrite has to happen in root mode too - there we replace it with the
 /// empty string. The pre-compressed `.br`/`.gz` siblings produced at build
 /// time also contain the placeholder and therefore can't be reused;
 /// `build_app` wraps the asset branch with `CompressionLayer` to cover
@@ -119,7 +119,7 @@ fn get_or_rewrite(path: &str, base: &str) -> Option<Arc<Vec<u8>>> {
     let rewritten = if contains(&raw, BASE_PLACEHOLDER.as_bytes()) {
         match std::str::from_utf8(&raw) {
             Ok(s) => s.replace(BASE_PLACEHOLDER, base).into_bytes(),
-            // Asset claims a text mime but isn't valid UTF-8 — serve the
+            // Asset claims a text mime but isn't valid UTF-8 - serve the
             // raw bytes rather than refusing. This shouldn't happen in
             // practice with anything Vite emits.
             Err(_) => raw,

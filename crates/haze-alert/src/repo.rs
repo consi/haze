@@ -893,7 +893,7 @@ pub async fn delete_state(pool: &SqlitePool, rule_id: i64, host_id: i64) -> Resu
 
 /// Slim host metadata the engine needs to enrich webhook payloads.
 ///
-/// `probe_config` stays as the stored JSON string — the caller decides
+/// `probe_config` stays as the stored JSON string - the caller decides
 /// whether to parse it into a nested object or fall back to the raw form.
 pub struct HostMeta {
     pub uuid: Uuid,
@@ -927,7 +927,7 @@ pub async fn host_meta_by_id(
 
 /// Load a rule (including disabled ones) shaped as `EnabledRule`.
 ///
-/// `hosts` is left empty — only the metadata + `webhook_urls` are
+/// `hosts` is left empty - only the metadata + `webhook_urls` are
 /// needed. Used by reconciliation when a previously-firing rule has
 /// been disabled or its targets edited; we still need to deliver the
 /// resolve webhook against the rule's last-known wiring.

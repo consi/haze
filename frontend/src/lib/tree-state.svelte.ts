@@ -10,7 +10,7 @@
 // choices survive a refresh. Stale UUIDs (for groups that have been
 // deleted) are inert: the renderer only checks "is this group's UUID in
 // the set?" so they're effectively ignored. Newly-created groups appear
-// collapsed because their UUID isn't in the saved set yet — host changes
+// collapsed because their UUID isn't in the saved set yet - host changes
 // don't affect the set at all.
 
 const LS_KEY = 'haze.treeExpanded';
@@ -25,7 +25,7 @@ function loadInitial(): Set<string> {
       return new Set(parsed.filter((x): x is string => typeof x === 'string'));
     }
   } catch {
-    // Bad JSON / private-mode quota / etc. — start fresh.
+    // Bad JSON / private-mode quota / etc. - start fresh.
   }
   return new Set();
 }
@@ -35,7 +35,7 @@ function persist(set: Set<string>): void {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify([...set]));
   } catch {
-    // Quota exceeded / private mode — silently ignore. The set still
+    // Quota exceeded / private mode - silently ignore. The set still
     // works in-memory for the current session.
   }
 }

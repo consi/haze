@@ -1,7 +1,7 @@
 # Packaging notes
 
 For end users, the published `.deb` / `.rpm` artefacts from the GitHub
-release page are the recommended path — they install the binary, the
+release page are the recommended path - they install the binary, the
 systemd unit, and a sample env file in one step. This document covers the
 manual install for people building from source.
 

@@ -13,7 +13,7 @@
   // The welcome page is logged-in-only UNLESS public mode is on, in which
   // case anonymous visitors stay here and see a trimmed read-only variant.
   // The layout's onMount redirect only runs on initial mount, so clicking
-  // the logo while signed-out used to land here without auth — this effect
+  // the logo while signed-out used to land here without auth - this effect
   // handles every subsequent visit. Gated on `publicMode.initialized` so a
   // cold load doesn't redirect before /server-info resolves.
   $effect(() => {

@@ -170,7 +170,14 @@
     {:else if err}
       <p class="text-xs p-2" style="color: var(--latency-bad)">{err}</p>
     {:else if series}
-      <SmokeChart {series} xMin={fromSecs} xMax={toSecs} {onZoom} height={182} />
+      <SmokeChart
+        {series}
+        xMin={fromSecs}
+        xMax={toSecs}
+        {onZoom}
+        height={182}
+        title={host.display_name}
+      />
     {:else}
       <p class="text-xs p-2" style="color: var(--muted)">Loading…</p>
     {/if}

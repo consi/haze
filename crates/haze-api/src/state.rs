@@ -34,7 +34,7 @@ pub struct AppState {
     /// Wake-up for long-lived response handlers (currently just the SSE
     /// stream) to bail out at shutdown. Without this, axum's graceful
     /// shutdown blocks forever waiting for the held-open `/events`
-    /// response to drain — `broadcast::Receiver::recv().await` never
+    /// response to drain - `broadcast::Receiver::recv().await` never
     /// resolves on its own, so we'd sit until SIGKILL.
     pub shutdown: Arc<Notify>,
     /// `Path=` attribute for the session cookie. Equal to the normalized
@@ -54,7 +54,7 @@ pub struct AppState {
 
 impl AppState {
     /// Send a change notification on a best-effort basis. Ignores the case
-    /// where there are no subscribers — that's normal when no browser tab
+    /// where there are no subscribers - that's normal when no browser tab
     /// happens to be open. Call this *after* the mutating SQL has committed.
     pub fn notify(&self, kind: ChangeKind) {
         let _ = self.events.send(kind);

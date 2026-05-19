@@ -29,15 +29,26 @@ use std::{
 
 use crate::slot::Slot;
 
-const RECORD_PAYLOAD: usize = 36; // 8 (ts) + 7*4 (fields)
-const RECORD_TOTAL: usize = 4 + RECORD_PAYLOAD;
+pub const RECORD_PAYLOAD: usize = 36; // 8 (ts) + 7*4 (fields)
+pub const RECORD_TOTAL: usize = 4 + RECORD_PAYLOAD;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WalError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    #[error("malformed WAL record (length {0})")]
-    BadRecord(u32),
+}
+
+/// Outcome of replaying a WAL file.
+///
+/// `records` holds every well-formed sample up to the first framing failure.
+/// `valid_bytes` is the byte offset past the last well-formed record - anything
+/// beyond it is either a benign trailing partial write or active corruption,
+/// and the caller is expected to truncate the file to `valid_bytes` before
+/// resuming appends.
+#[derive(Debug, Clone)]
+pub struct ReplayOutcome {
+    pub records: Vec<(i64, Slot)>,
+    pub valid_bytes: u64,
 }
 
 /// Append a single sample to an open WAL file. Caller is responsible for
@@ -61,10 +72,16 @@ pub fn sync(wal: &mut File) -> Result<(), WalError> {
     Ok(())
 }
 
-/// Read every well-formed record from a WAL file. A trailing partial record
-/// (e.g. from a crash mid-write) is silently ignored - the next caller will
-/// just rewrite the lost sample on the next probe period.
-pub fn replay(path: &Path) -> Result<Vec<(i64, Slot)>, WalError> {
+/// Read every well-formed record from a WAL file.
+///
+/// A trailing partial record (e.g. from a crash mid-write) is silently
+/// ignored - the next caller will just rewrite the lost sample on the next
+/// probe period. A malformed length header in the interior is treated the
+/// same way: replay stops and the returned `valid_bytes` lets the caller
+/// truncate the corrupt tail so a future append can resume cleanly. Losing
+/// a probe loop forever to one bad byte-range is worse than dropping the
+/// unreadable suffix.
+pub fn replay(path: &Path) -> Result<ReplayOutcome, WalError> {
     let mut file = File::open(path)?;
     let file_len = file.metadata()?.len() as usize;
     let mut out = Vec::with_capacity(file_len / RECORD_TOTAL);
@@ -78,8 +95,13 @@ pub fn replay(path: &Path) -> Result<Vec<(i64, Slot)>, WalError> {
         }
         let len = u32::from_le_bytes(hdr);
         if len as usize != RECORD_PAYLOAD {
-            // Corrupt or future-format record; stop replay defensively.
-            return Err(WalError::BadRecord(len));
+            tracing::warn!(
+                wal_path = %path.display(),
+                offset = pos,
+                bad_length = len,
+                "wal corruption detected; stopping replay at first malformed record"
+            );
+            break;
         }
         if file.read_exact(&mut payload).is_err() {
             // Partial trailing record - stop, no error.
@@ -94,7 +116,10 @@ pub fn replay(path: &Path) -> Result<Vec<(i64, Slot)>, WalError> {
         out.push((ts, Slot::from_fields(fields)));
         pos += RECORD_TOTAL;
     }
-    Ok(out)
+    Ok(ReplayOutcome {
+        records: out,
+        valid_bytes: pos as u64,
+    })
 }
 
 /// Open (or create) a WAL file for append.
@@ -133,13 +158,14 @@ mod tests {
         append(&mut f, 1_700_000_060, &Slot::NAN).unwrap();
         drop(f);
 
-        let records = replay(&path).unwrap();
-        assert_eq!(records.len(), 3);
-        assert_eq!(records[0].0, 1_700_000_000);
-        assert_eq!(records[1].0, 1_700_000_030);
-        assert!(records[2].1.is_nan());
+        let outcome = replay(&path).unwrap();
+        assert_eq!(outcome.records.len(), 3);
+        assert_eq!(outcome.valid_bytes, 3 * RECORD_TOTAL as u64);
+        assert_eq!(outcome.records[0].0, 1_700_000_000);
+        assert_eq!(outcome.records[1].0, 1_700_000_030);
+        assert!(outcome.records[2].1.is_nan());
         // Round-trip exact f32 bits
-        assert_eq!(records[0].1.median.to_bits(), 21.0_f32.to_bits());
+        assert_eq!(outcome.records[0].1.median.to_bits(), 21.0_f32.to_bits());
     }
 
     #[test]
@@ -152,8 +178,45 @@ mod tests {
             // Append a partial record manually (only header, no payload).
             f.write_all(&(RECORD_PAYLOAD as u32).to_le_bytes()).unwrap();
         }
-        let records = replay(&path).unwrap();
-        assert_eq!(records.len(), 1);
-        assert_eq!(records[0].0, 1_700_000_000);
+        let outcome = replay(&path).unwrap();
+        assert_eq!(outcome.records.len(), 1);
+        // The 4-byte partial header is shorter than RECORD_TOTAL, so the
+        // outer `pos + RECORD_TOTAL <= file_len` check exits the loop before
+        // we'd even try to parse it - valid_bytes stops at the last full
+        // record boundary.
+        assert_eq!(outcome.valid_bytes, RECORD_TOTAL as u64);
+        assert_eq!(outcome.records[0].0, 1_700_000_000);
+    }
+
+    #[test]
+    fn replay_stops_at_malformed_record() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.wal");
+        {
+            let mut f = open_for_append(&path).unwrap();
+            append(&mut f, 1_700_000_000, &slot(21.0)).unwrap();
+            append(&mut f, 1_700_000_030, &slot(22.0)).unwrap();
+            // 40 bytes of zeros - the length header reads as 0, which is the
+            // exact prod symptom ("malformed WAL record (length 0)").
+            f.write_all(&[0u8; RECORD_TOTAL]).unwrap();
+        }
+        let outcome = replay(&path).unwrap();
+        assert_eq!(outcome.records.len(), 2);
+        assert_eq!(outcome.valid_bytes, 2 * RECORD_TOTAL as u64);
+        assert_eq!(outcome.records[0].0, 1_700_000_000);
+        assert_eq!(outcome.records[1].0, 1_700_000_030);
+    }
+
+    #[test]
+    fn replay_zero_length_at_start() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.wal");
+        {
+            let mut f = open_for_append(&path).unwrap();
+            f.write_all(&[0u8; RECORD_TOTAL]).unwrap();
+        }
+        let outcome = replay(&path).unwrap();
+        assert!(outcome.records.is_empty());
+        assert_eq!(outcome.valid_bytes, 0);
     }
 }

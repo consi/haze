@@ -5,9 +5,13 @@
 
   let {
     hostUuid,
+    hostName,
     onZoom
   }: {
     hostUuid: string;
+    /** Display name used as the title in any panel's copy-as-PNG export
+     *  so the resulting image is self-identifying once pasted elsewhere. */
+    hostName?: string;
     /**
      * Called when the user drag-zooms or right-click zooms-out on a panel.
      * Forwarded to the host detail page so the main chart updates - the
@@ -174,6 +178,7 @@
             xMax={panel.toSecs}
             {onZoom}
             height={140}
+            title={hostName}
           />
         {:else if panel.err}
           <p class="text-xs p-2" style="color: var(--latency-bad)">{panel.err}</p>

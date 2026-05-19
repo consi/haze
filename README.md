@@ -20,12 +20,12 @@
 ## Features
 
 - Six probe types:
-  - `ping` — ICMP echo round-trip time
-  - `dns` — DNS resolution latency
-  - `tcp_connect` — TCP handshake time
-  - `tls_connect` — TCP + TLS handshake time
-  - `http_ttfb` — HTTP request to first response byte
-  - `http_total` — HTTP request including body download
+  - `ping` - ICMP echo round-trip time
+  - `dns` - DNS resolution latency
+  - `tcp_connect` - TCP handshake time
+  - `tls_connect` - TCP + TLS handshake time
+  - `http_ttfb` - HTTP request to first response byte
+  - `http_total` - HTTP request including body download
 - Percentile bands (median + outer envelopes) with packet-loss-driven opacity.
 - Multi-host overlay views, per-host detail with alerting hooks.
 - Auth via password and `WebAuthn` passkeys (`HAZE_ORIGIN` must be set for passkeys).
@@ -70,10 +70,13 @@ journalctl -u haze -f
 docker run --rm \
     -p 4420:4420 \
     -v haze-data:/var/lib/haze \
+    --ulimit nofile=65536:65536 \
     ghcr.io/consi/haze:latest
 ```
 
 The image is distroless (`gcr.io/distroless/static-debian12:nonroot`) and ships only the static binary. Multi-arch (`linux/amd64`, `linux/arm64`).
+
+The `--ulimit` flag matches the `LimitNOFILE=65536` the systemd `.deb` install applies. Each monitored host keeps two file descriptors open (lock + active WAL); a deployment of ~400 hosts sits within ~100 FDs of the kernel default of 1024, and a burst of parallel `/series` requests can push the process over. Skip the flag and you'll see `EMFILE` / "Too many open files" once you scale past a couple of hundred hosts.
 
 ## Quick start
 
@@ -90,16 +93,16 @@ The image is distroless (`gcr.io/distroless/static-debian12:nonroot`) and ships 
 | `HAZE_BIND`       | `127.0.0.1:4420`     | Bind address. Use `0.0.0.0:4420` to listen on all interfaces.                        |
 | `HAZE_DATA_DIR`   | `./data` (binary), `/var/lib/haze` (systemd) | SQLite database and probe chunk files (HZC).              |
 | `HAZE_LOG`        | `info`               | `tracing-subscriber` directive, e.g. `haze=debug,info`.                              |
-| `HAZE_ORIGIN`     | _unset_              | Public origin (`https://haze.example.com`) — required for WebAuthn passkeys.         |
+| `HAZE_ORIGIN`     | _unset_              | Public origin (`https://haze.example.com`) - required for WebAuthn passkeys.         |
 | `HAZE_BASE_URL`   | _unset_ (root `/`)   | URL path prefix to deploy under, e.g. `/haze`. See [Reverse-proxying under a sub-path](#reverse-proxying-under-a-sub-path). |
 
 CLI flags mirror the env vars (`--bind`, `--data-dir`, `--log`, `--origin`, `--base-url` / `--base-path`).
 
 ### Reverse-proxying under a sub-path
 
-By default Haze serves the UI and API at the root path (`/`). To deploy it under a sub-path — e.g. `https://example.com/haze/` — set `HAZE_BASE_URL` (or pass `--base-path /haze`) on the haze process. The same binary / Docker image works at any path; the frontend is rewritten at serve time so no rebuild is needed.
+By default Haze serves the UI and API at the root path (`/`). To deploy it under a sub-path - e.g. `https://example.com/haze/` - set `HAZE_BASE_URL` (or pass `--base-path /haze`) on the haze process. The same binary / Docker image works at any path; the frontend is rewritten at serve time so no rebuild is needed.
 
-The prefix must be a URL path only — no scheme, no host. `/haze` and `/monitoring/haze` are valid; `https://x.com/haze` is rejected at startup.
+The prefix must be a URL path only - no scheme, no host. `/haze` and `/monitoring/haze` are valid; `https://x.com/haze` is rejected at startup.
 
 Example nginx config:
 
@@ -113,7 +116,7 @@ location /haze/ {
 }
 ```
 
-Container/k8s liveness probes can keep hitting `/healthz` directly — that route is always served at the root path regardless of `HAZE_BASE_URL` so the probe doesn't have to go through the reverse proxy. The same probe is also reachable at `${HAZE_BASE_URL}/healthz` for proxied checks.
+Container/k8s liveness probes can keep hitting `/healthz` directly - that route is always served at the root path regardless of `HAZE_BASE_URL` so the probe doesn't have to go through the reverse proxy. The same probe is also reachable at `${HAZE_BASE_URL}/healthz` for proxied checks.
 
 ## Building from source
 
@@ -135,4 +138,4 @@ cargo zigbuild --release --target aarch64-unknown-linux-musl -p haze-cli
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE). If you run Haze on a network-accessible service, the AGPL's network-use clause applies — you must offer the source to users of that service.
+[AGPL-3.0-or-later](LICENSE). If you run Haze on a network-accessible service, the AGPL's network-use clause applies - you must offer the source to users of that service.

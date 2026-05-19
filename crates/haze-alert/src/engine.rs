@@ -16,10 +16,10 @@
 //! from a targeted group, rule's targets edited, rule disabled, host
 //! disabled) gets a synthetic resolve webhook with
 //! `reason: "match_lost"` and the state row is deleted. Host *deletion*
-//! is not covered — `ON DELETE CASCADE` removes the state row before we
+//! is not covered - `ON DELETE CASCADE` removes the state row before we
 //! can see it; intentional limitation for the simpler design.
 //!
-//! All disk I/O is sqlx; no HZC reads happen on the hot path — the
+//! All disk I/O is sqlx; no HZC reads happen on the hot path - the
 //! probes feed the `SeriesStore`, and the engine reads only from RAM.
 
 use std::{
@@ -81,7 +81,7 @@ impl AlertEngine {
     }
 
     /// Spawn-and-forget loop. Sleeps for `alerting.eval_interval_secs`
-    /// between cycles — value is re-read each iteration so changes in
+    /// between cycles - value is re-read each iteration so changes in
     /// /settings/alerting take effect on the next tick without a restart.
     pub fn run(self) -> tokio::task::JoinHandle<()> {
         let engine = Arc::new(self);
@@ -291,7 +291,7 @@ impl AlertEngine {
                     rule_uuid = %rule.uuid,
                     host_uuid = %state.host_uuid,
                     from = state.severity.as_str(),
-                    "alert match lost — sending resolve"
+                    "alert match lost - sending resolve"
                 );
                 self.notify(
                     &rule,
@@ -356,7 +356,7 @@ impl AlertEngine {
             Some(m) => {
                 // probe_config is a JSON string in the DB; parse it so
                 // consumers see a nested object. Fall back to the raw
-                // string under the same key if parsing fails — better
+                // string under the same key if parsing fails - better
                 // than dropping the field.
                 let probe_config: serde_json::Value = serde_json::from_str(&m.probe_config)
                     .unwrap_or_else(|_| serde_json::Value::String(m.probe_config.clone()));
@@ -389,7 +389,7 @@ impl AlertEngine {
             "ts": now,
         });
         // Clone the client out of the lock for the duration of the
-        // sends — held read locks across awaits would otherwise stop the
+        // sends - held read locks across awaits would otherwise stop the
         // loop from swapping the client when settings change.
         let client = self.http.read().clone();
         for (_webhook_uuid, url, headers) in &rule.webhook_urls {

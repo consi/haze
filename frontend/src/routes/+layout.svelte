@@ -31,7 +31,7 @@
   import { page } from '$app/state';
 
   // Single redirect path for any code path that detects the session is
-  // gone — both the central api.ts 401 trap and the EventSource terminal
+  // gone - both the central api.ts 401 trap and the EventSource terminal
   // error route through this. Guard against re-entrant calls (already on
   // /login) so we don't queue infinite navigations.
   //
@@ -149,7 +149,7 @@
   // If public mode flips off while we're anonymous, bounce to /login.
   // Gated on `publicMode.initialized` so the very first render doesn't
   // redirect against the default `enabled = false` before the
-  // /server-info fetch resolves — that race was sending anonymous
+  // /server-info fetch resolves - that race was sending anonymous
   // visitors straight to /login on cold loads.
   $effect(() => {
     if (
@@ -254,7 +254,7 @@
 <!-- h-dvh (dynamic viewport height) instead of min-h-screen so the flex
      chain has a definite height. With min-h-screen the root could grow
      past the viewport, BODY would scroll, and `<main>`'s
-     `overflow-y-auto` never kicked in — which broke the sticky compact
+     `overflow-y-auto` never kicked in - which broke the sticky compact
      header on host/group pages. The `shrink-0` on <header> + `min-h-0`
      on the flex-1 chain below are required because flex items default
      to `min-height: auto`, which lets long content push the row taller

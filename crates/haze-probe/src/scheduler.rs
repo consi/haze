@@ -150,7 +150,7 @@ impl Scheduler {
             cmd_tx,
             cmd_rx: Some(cmd_rx),
             ping_clients: Arc::new(PingClients::new()),
-            // Start at 1 — 0 is a valid identifier but conventionally avoided.
+            // Start at 1 - 0 is a valid identifier but conventionally avoided.
             next_ping_id: Arc::new(AtomicU16::new(1)),
             dns_resolvers: Arc::new(DnsResolvers::new()),
             http_clients: Arc::new(HttpClients::new()),
@@ -419,14 +419,19 @@ async fn host_loop(
         .await;
         let slot = aggregate(&observations);
 
-        let writer = store.writer(uuid, interval_secs, chunk_window_secs)?;
-        if let Err(e) = writer.write_sample(ts, slot) {
-            warn!(uuid = %uuid, error = %e, "write_sample failed");
-        } else {
-            debug!(uuid = %uuid, ts, median = ?slot.median, loss = ?slot.loss_pct, "wrote probe slot");
-            // Mirror into the in-memory series so the alert evaluator
-            // reads from RAM instead of replaying chunks on every tick.
-            series.append(uuid, ts, slot);
+        // Storage errors must never kill the host loop. Losing one period's
+        // sample is recoverable; losing the loop until daemon restart is not.
+        match store.writer(uuid, interval_secs, chunk_window_secs) {
+            Ok(writer) => match writer.write_sample(ts, slot) {
+                Ok(()) => {
+                    debug!(uuid = %uuid, ts, median = ?slot.median, loss = ?slot.loss_pct, "wrote probe slot");
+                    // Mirror into the in-memory series so the alert evaluator
+                    // reads from RAM instead of replaying chunks on every tick.
+                    series.append(uuid, ts, slot);
+                }
+                Err(e) => warn!(uuid = %uuid, error = %e, "write_sample failed"),
+            },
+            Err(e) => warn!(uuid = %uuid, error = %e, "store.writer() failed; skipping period"),
         }
 
         tick.tick().await;

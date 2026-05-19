@@ -3,7 +3,7 @@
 //! Each probe opens a fresh TCP+TLS connection (idle-pool disabled) so
 //! timings reflect a cold request. `reqwest::Client`s are cached
 //! process-wide in [`HttpClients`], keyed by the only two settings that
-//! must be baked into the client (`verify_tls`, `follow_redirects`) — so
+//! must be baked into the client (`verify_tls`, `follow_redirects`) - so
 //! we have at most four shared clients regardless of host count. Per-request
 //! timeout/method live on the `RequestBuilder`, not the client.
 

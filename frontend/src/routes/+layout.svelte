@@ -376,8 +376,8 @@
             {groups}
             {hosts}
             search={searchDebounced}
-            onEditGroup={(g) => (editGroupTarget = g)}
-            onEditHost={(h) => (editHostTarget = h)}
+            onEditGroup={canEditGroups() ? (g) => (editGroupTarget = g) : undefined}
+            onEditHost={canEditHosts() ? (h) => (editHostTarget = h) : undefined}
           />
         {/if}
       </aside>
@@ -494,8 +494,8 @@
                 {groups}
                 {hosts}
                 search={searchDebounced}
-                onEditGroup={(g) => (editGroupTarget = g)}
-                onEditHost={(h) => (editHostTarget = h)}
+                onEditGroup={canEditGroups() ? (g) => (editGroupTarget = g) : undefined}
+                onEditHost={canEditHosts() ? (h) => (editHostTarget = h) : undefined}
               />
             </div>
           {/if}

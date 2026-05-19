@@ -363,8 +363,15 @@
       {/if}
     </div>
 
-    <SmallMultiples hostUuid={host.uuid} hostName={host.display_name} {onZoom} />
   {:else}
     <p class="text-xs" style="color: var(--muted)">Loading…</p>
+  {/if}
+
+  <!-- Rendered outside the {#if host} gate so its 4 panel fetches start in
+       parallel with the host metadata + main-chart series fetch, instead of
+       waiting one extra round-trip behind the host load. hostName is
+       optional in SmokeChart so undefined until host arrives is fine. -->
+  {#if !err && hostUuid}
+    <SmallMultiples {hostUuid} hostName={host?.display_name} {onZoom} />
   {/if}
 </div>

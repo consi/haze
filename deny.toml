@@ -7,17 +7,17 @@ version = 2
 ignore = [
     # paste is archived/unmaintained. Pulled in transitively by utoipa-axum
     # 0.2; there is no fix available and no in-tree replacement. The crate
-    # is a procedural macro for token pasting, used at build time only —
+    # is a procedural macro for token pasting, used at build time only,
     # zero runtime exposure. Revisit when utoipa-axum drops the dep.
     "RUSTSEC-2024-0436",
-    # hickory-proto BinEncoder O(n²) name compression: CPU exhaustion when
-    # *encoding* large adversarial DNS messages. Haze uses hickory-resolver
-    # as a stub resolver — outgoing queries carry one question and are
-    # constructed from operator-supplied probe config, not attacker input.
-    # The fix ships in hickory-proto 0.26.1, which requires hickory-resolver
-    # 0.26 and a (semver-breaking) API rewrite of the DNS probe. Tracked as
-    # follow-up; ignored here because the attack surface is internal.
-    "RUSTSEC-2026-0119",
+    # rsa "Marvin Attack" timing sidechannel. Upstream advisory says "no
+    # fixed upgrade available". The crate is pulled in transitively by
+    # sqlx-mysql, which ships in sqlx-macros for compile-time SQL checking
+    # against any configured backend. Haze only enables sqlx's "sqlite"
+    # feature at runtime, so the rsa codepath is never linked into the
+    # running binary nor executed by the macro. Revisit when sqlx ships a
+    # fix or splits macros per backend.
+    "RUSTSEC-2023-0071",
 ]
 
 [licenses]

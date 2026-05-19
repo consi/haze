@@ -12,7 +12,8 @@
     onZoom,
     xMin,
     xMax,
-    title
+    title,
+    pinScale = false
   }: {
     series: SeriesResp;
     height?: number;
@@ -32,6 +33,14 @@
      * their own headers. Typical content: `"6 hours"`, `"my-host · 30m"`.
      */
     title?: string;
+    /**
+     * When true, a user drag-zoom on this chart still fires `onZoom` (so a
+     * parent like the host detail page can update its MAIN chart) but the
+     * chart itself snaps back to `xMin`/`xMax` instead of zooming in. Used
+     * by the multi-period panels so each one keeps showing its fixed
+     * "last 6 h / 48 h / 14 d / 90 d" window regardless of zoom gestures.
+     */
+    pinScale?: boolean;
   } = $props();
 
   let copyState = $state<'idle' | 'copied' | 'error'>('idle');
@@ -542,6 +551,11 @@
         const startVal = plot.posToVal(lo - insetX, 'x');
         const endVal = plot.posToVal(hi - insetX, 'x');
         onZoom(Math.round(startVal), Math.round(endVal));
+        // Same lock-down as the mouse setSelect path: keep multi-period
+        // panels at their fixed window even after a touch drag-zoom.
+        if (pinScale && xMin != null && xMax != null) {
+          plot.setScale('x', { min: xMin, max: xMax });
+        }
       }
     }
 
@@ -713,7 +727,11 @@
         x: true,
         y: false,
         points: { show: false },
-        drag: { x: true, y: false, dist: 5 }
+        // pinScale: keep uPlot from auto-zooming on drag release. The
+        // selection rectangle still renders and `setSelect` still fires
+        // (so the parent's onZoom can update other charts), but this
+        // chart's own scale stays where xMin/xMax pinned it.
+        drag: { x: true, y: false, dist: 5, setScale: !pinScale }
       },
       hooks: {
         draw: [
@@ -796,6 +814,13 @@
             const x1 = u.posToVal(left + width, 'x');
             onZoom(Math.round(x0), Math.round(x1));
             u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
+            // pinScale: caller wants the chart locked to its current window
+            // (e.g. multi-period panels), so undo uPlot's drag-zoom on the
+            // local chart. The onZoom call above already updated whatever
+            // the parent wants updated.
+            if (pinScale && xMin != null && xMax != null) {
+              u.setScale('x', { min: xMin, max: xMax });
+            }
           }
         ]
       }
@@ -833,17 +858,51 @@
       }
       return;
     }
-    const opts = makeOpts(container.clientWidth || 600);
-    plot = new uPlot(opts, data, container);
-    if (xMin != null && xMax != null) {
-      plot.setScale('x', { min: xMin, max: xMax });
-      lastXMin = xMin;
-      lastXMax = xMax;
-    }
+
+    // First-time creation. Defer until the container has real dimensions -
+    // the multi-period grid uses CSS auto-fit columns whose width isn't
+    // known on the very first paint, so `container.clientWidth` can read 0.
+    // Creating uPlot at 0×height then calling setSize() later leaves the
+    // custom drawers in a state where the line doesn't render until the
+    // user interacts with the chart (cursor crosshair triggers a redraw).
+    // Wait for the ResizeObserver to deliver a non-zero width before
+    // building the plot.
+    const tryCreate = () => {
+      if (plot) return;
+      const w = container?.clientWidth ?? 0;
+      if (w <= 0) return;
+      const opts = makeOpts(w);
+      plot = new uPlot(opts, data, container!);
+      if (xMin != null && xMax != null) {
+        plot.setScale('x', { min: xMin, max: xMax });
+        lastXMin = xMin;
+        lastXMax = xMax;
+      }
+      // Force a clean redraw cycle right after construction. uPlot's
+      // initial draw sometimes runs in a state where the custom drawers
+      // (the smoke bands + median line) leave the canvas blank until
+      // *something else* triggers a redraw - cursor crosshair on hover,
+      // setData on the 10 s auto-refresh interval, etc. Calling setData
+      // with the same array reference reliably re-runs the full draw
+      // cycle the way the auto-refresh path does, which is the one the
+      // user observed always renders the line correctly.
+      plot.setData(data, false);
+      if (xMin != null && xMax != null) {
+        plot.setScale('x', { min: xMin, max: xMax });
+      }
+    };
     const ro = new ResizeObserver(() => {
-      if (container && plot) plot.setSize({ width: container.clientWidth, height });
+      if (!container) return;
+      if (!plot) {
+        tryCreate();
+        return;
+      }
+      plot.setSize({ width: container.clientWidth, height });
     });
     ro.observe(container);
+    // Also try synchronously - if the container already has a width
+    // (post-hydration or component reuse), we skip the RO round-trip.
+    tryCreate();
     return () => ro.disconnect();
   });
 

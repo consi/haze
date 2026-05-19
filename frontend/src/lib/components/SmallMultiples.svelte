@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import type { SeriesResp } from '$lib/api';
   import { isAbortError, loadSeries, samplesForWidth } from '$lib/series';
   import SmokeChart from './SmokeChart.svelte';
@@ -101,18 +102,27 @@
   // No per-panel refs required.
   let gridContainer: HTMLDivElement | undefined = $state();
   let panelWidth = $state(600);
+
+  function measurePanelWidth(): number {
+    if (!gridContainer) return panelWidth;
+    const w = Math.round(gridContainer.getBoundingClientRect().width);
+    if (w <= 0) return panelWidth;
+    const cols = Math.max(1, Math.floor(w / 420));
+    return Math.max(200, Math.round(w / cols));
+  }
+
   $effect(() => {
     if (!gridContainer) return;
     let pending: ReturnType<typeof setTimeout> | undefined;
     const ro = new ResizeObserver((entries) => {
-      // Mirror the auto-fit rule (minmax 420 px per column) to derive
-      // per-panel width from the grid container's width.
       const w = Math.round(entries[0].contentRect.width);
       const cols = Math.max(1, Math.floor(w / 420));
       const next = Math.max(200, Math.round(w / cols));
       if (next === panelWidth) return;
       if (pending) clearTimeout(pending);
       pending = setTimeout(() => {
+        pending = undefined;
+        if (panelWidth === next) return;
         panelWidth = next;
         void loadAll();
       }, 200);
@@ -124,20 +134,38 @@
     };
   });
 
+  // Fire the very first fetch from onMount rather than $effect. $effect
+  // sometimes deferred or never fired on initial mount in production (panels
+  // sat on "Loading..." until the 10 s auto-refresh interval below caught
+  // them - which exactly matches the "loads after ~8 seconds" symptom).
+  // onMount fires deterministically once, right after the DOM is ready.
+  onMount(() => {
+    if (!hostUuid) return;
+    panelWidth = measurePanelWidth();
+    void loadAll();
+  });
+
+  // Re-fire when the host UUID changes (user navigates to a different host
+  // without unmounting this component). Skips the very first run because
+  // onMount already handled it.
+  let firstHostUuidRun = true;
   $effect(() => {
-    if (hostUuid) {
-      // Reset each panel to "loading" before the new fetch - keeps the
-      // previous host's charts from lingering while switching hosts.
-      panels = PANELS.map((p) => ({
-        label: p.label,
-        spanSecs: p.spanSecs,
-        fromSecs: 0,
-        toSecs: 0,
-        series: null,
-        err: null
-      }));
-      void loadAll();
+    const u = hostUuid;
+    if (!u) return;
+    if (firstHostUuidRun) {
+      firstHostUuidRun = false;
+      return;
     }
+    panels = PANELS.map((p) => ({
+      label: p.label,
+      spanSecs: p.spanSecs,
+      fromSecs: 0,
+      toSecs: 0,
+      series: null,
+      err: null
+    }));
+    panelWidth = measurePanelWidth();
+    void loadAll();
   });
 
   // Auto-refresh small-multiples too. They always show "last X" relative to
@@ -179,6 +207,7 @@
             {onZoom}
             height={140}
             title={hostName}
+            pinScale
           />
         {:else if panel.err}
           <p class="text-xs p-2" style="color: var(--latency-bad)">{panel.err}</p>

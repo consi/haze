@@ -1,7 +1,7 @@
 //! DNS resolution latency probe via hickory-resolver.
 //!
 //! Resolvers are cached process-wide in [`DnsResolvers`], keyed by the
-//! configured upstream (None for the system resolver). Each [`TokioAsyncResolver`]
+//! configured upstream (None for the system resolver). Each [`TokioResolver`]
 //! owns a UDP socket plus an internal receive loop, so building one per host
 //! would replicate the per-host surge-ping anti-pattern (hundreds of recv
 //! tasks competing for the executor).
@@ -16,20 +16,21 @@ use std::{
 
 use async_trait::async_trait;
 use hickory_resolver::{
-    TokioAsyncResolver,
-    config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts},
+    TokioResolver,
+    config::{ConnectionConfig, NameServerConfig, ResolverConfig, ResolverOpts},
+    net::runtime::TokioRuntimeProvider,
     proto::rr::RecordType,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{Probe, ProbeContext, ProbeError, ProbeKind};
 
-/// Process-wide cache of `TokioAsyncResolver`s keyed by upstream address.
+/// Process-wide cache of `TokioResolver`s keyed by upstream address.
 ///
 /// `None` keys the system resolver. Building a resolver allocates a UDP
 /// socket and spawns a recv loop, so we share aggressively across hosts.
 pub struct DnsResolvers {
-    inner: Mutex<HashMap<Option<SocketAddr>, Arc<TokioAsyncResolver>>>,
+    inner: Mutex<HashMap<Option<SocketAddr>, Arc<TokioResolver>>>,
 }
 
 impl DnsResolvers {
@@ -39,24 +40,27 @@ impl DnsResolvers {
         }
     }
 
-    pub fn get(&self, upstream: Option<SocketAddr>) -> Arc<TokioAsyncResolver> {
+    pub fn get(&self, upstream: Option<SocketAddr>) -> Arc<TokioResolver> {
         let mut g = self.inner.lock().expect("dns resolvers mutex poisoned");
         if let Some(r) = g.get(&upstream) {
             return r.clone();
         }
         let resolver = match upstream {
             Some(sa) => {
-                let mut cfg = ResolverConfig::new();
-                cfg.add_name_server(NameServerConfig {
-                    socket_addr: sa,
-                    protocol: Protocol::Udp,
-                    tls_dns_name: None,
-                    trust_negative_responses: true,
-                    bind_addr: None,
-                });
-                TokioAsyncResolver::tokio(cfg, ResolverOpts::default())
+                let mut udp = ConnectionConfig::udp();
+                udp.port = sa.port();
+                let ns = NameServerConfig::new(sa.ip(), true, vec![udp]);
+                let mut cfg = ResolverConfig::from_parts(None, vec![], vec![]);
+                cfg.add_name_server(ns);
+                TokioResolver::builder_with_config(cfg, TokioRuntimeProvider::default())
+                    .with_options(ResolverOpts::default())
+                    .build()
+                    .expect("upstream resolver builder")
             }
-            None => TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default()),
+            None => TokioResolver::builder_tokio()
+                .expect("system resolver builder")
+                .build()
+                .expect("system resolver build"),
         };
         let arc = Arc::new(resolver);
         g.insert(upstream, arc.clone());
@@ -97,7 +101,7 @@ pub struct DnsConfig {
 
 pub struct DnsProbe {
     cfg: DnsConfig,
-    resolver: Arc<TokioAsyncResolver>,
+    resolver: Arc<TokioResolver>,
     record_type: RecordType,
 }
 

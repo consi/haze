@@ -127,7 +127,7 @@ webpki-roots = "0.26"
 
 # Probes
 surge-ping = "0.8"
-hickory-resolver = "0.24"
+hickory-resolver = "0.26"
 url = "2"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
 

@@ -191,9 +191,13 @@ pub(crate) async fn login_finish(
     let mut resp = body.into_response();
     resp.headers_mut().insert(
         header::SET_COOKIE,
-        sessions::set_cookie(&cookie, &state.cookie_path)
-            .parse()
-            .expect("cookie value is ascii"),
+        sessions::set_cookie(
+            &cookie,
+            &state.cookie_path,
+            crate::middleware::is_secure_request(&headers),
+        )
+        .parse()
+        .expect("cookie value is ascii"),
     );
     Ok(resp)
 }

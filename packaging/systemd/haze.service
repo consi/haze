@@ -24,6 +24,14 @@ Environment=HAZE_BIND=0.0.0.0:4420
 
 EnvironmentFile=-/etc/haze/haze.env
 
+# Each monitored host holds two file descriptors open continuously (the
+# per-host lock file and the active WAL). With the kernel default of 1024
+# soft, a deployment of ~400 hosts already sits within ~100 FDs of the
+# ceiling, and a burst of parallel /series requests can push the process
+# over. SystemCallFilter=~@resources below blocks setrlimit() so the
+# process can't raise this itself - it has to come from the unit.
+LimitNOFILE=65536
+
 # Runs as a dedicated dynamic user with the minimum capability for ICMP.
 DynamicUser=yes
 AmbientCapabilities=CAP_NET_RAW

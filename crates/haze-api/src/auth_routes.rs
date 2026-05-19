@@ -69,7 +69,11 @@ pub(crate) async fn login(
         .get(header::USER_AGENT)
         .and_then(|v| v.to_str().ok());
     let cookie_value = sessions::create(&state.pool, row.id, ua, None).await?;
-    let set_cookie = sessions::set_cookie(&cookie_value, &state.cookie_path);
+    let set_cookie = sessions::set_cookie(
+        &cookie_value,
+        &state.cookie_path,
+        crate::middleware::is_secure_request(&headers),
+    );
 
     let role_str = role.as_str().to_owned();
 
@@ -106,9 +110,12 @@ pub(crate) async fn logout(
     let mut resp = StatusCode::NO_CONTENT.into_response();
     resp.headers_mut().insert(
         header::SET_COOKIE,
-        sessions::clear_cookie(&state.cookie_path)
-            .parse()
-            .expect("cookie value is ascii"),
+        sessions::clear_cookie(
+            &state.cookie_path,
+            crate::middleware::is_secure_request(&headers),
+        )
+        .parse()
+        .expect("cookie value is ascii"),
     );
     Ok(resp)
 }

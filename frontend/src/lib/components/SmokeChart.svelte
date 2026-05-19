@@ -407,12 +407,18 @@
   }
   function zoomOutOneWindow() {
     if (!onZoom) return;
-    const span = series.to - series.from;
+    // Source the span from the parent's pinned window when available - it
+    // tracks the just-selected preset synchronously, while `series.from/to`
+    // lags until the matching response lands. Falling back to the data
+    // range covers callers that don't pin a window.
+    const from = xMin ?? series.from;
+    const to = xMax ?? series.to;
+    const span = to - from;
     if (span <= 0) return;
     // Zoom out: keep the right edge ("now"-side) anchored and extend the
     // range backwards by another full span. That doubles the visible
     // window each click, naturally showing more history.
-    onZoom(Math.round(series.from - span), Math.round(series.to));
+    onZoom(Math.round(from - span), Math.round(to));
   }
 
   function onContextMenu(e: MouseEvent) {
@@ -492,12 +498,20 @@
     }
     const prev = touchState;
 
-    if (prev === 'drag' && touchDragRect && plot && onZoom) {
+    if (prev === 'drag' && touchDragRect && plot && onZoom && wrapper) {
       const lo = Math.min(touchDragRect.startX, touchDragRect.endX);
       const hi = Math.max(touchDragRect.startX, touchDragRect.endX);
       if (hi - lo > MOVE_THRESHOLD_PX) {
-        const startVal = plot.posToVal(lo, 'x');
-        const endVal = plot.posToVal(hi, 'x');
+        // touchDragRect is wrapper-relative so the visual band styles
+        // directly; posToVal wants plot-area-relative CSS pixels (no
+        // y-axis-label inset). Without subtracting the inset, a short
+        // drag near the left edge can map to a time entirely outside
+        // the visible window.
+        const overRect = plot.over.getBoundingClientRect();
+        const wrapRect = wrapper.getBoundingClientRect();
+        const insetX = overRect.left - wrapRect.left;
+        const startVal = plot.posToVal(lo - insetX, 'x');
+        const endVal = plot.posToVal(hi - insetX, 'x');
         onZoom(Math.round(startVal), Math.round(endVal));
       }
     }

@@ -152,19 +152,26 @@ fn sha256(bytes: &[u8]) -> [u8; 32] {
 /// `path` is the `Path=` attribute — typically the normalized
 /// `HAZE_BASE_URL` (e.g. `/haze`). Empty string is treated as `/` so the
 /// root-mode behaviour is byte-identical to the previous hard-coded value.
-pub fn set_cookie(cookie_value: &str, path: &str) -> String {
+///
+/// `secure` controls the `Secure` attribute: browsers refuse to store a
+/// `Secure` cookie sent over plain HTTP, so callers must pass `false` when
+/// the request reached the server unencrypted (e.g. local dev) and `true`
+/// behind an HTTPS reverse proxy. `SameSite=Lax` does not require `Secure`.
+pub fn set_cookie(cookie_value: &str, path: &str, secure: bool) -> String {
     let p = if path.is_empty() { "/" } else { path };
+    let secure_attr = if secure { "Secure; " } else { "" };
     format!(
-        "{COOKIE_NAME}={cookie_value}; Path={p}; HttpOnly; SameSite=Lax; Secure; Max-Age={ABSOLUTE_SECS}"
+        "{COOKIE_NAME}={cookie_value}; Path={p}; HttpOnly; SameSite=Lax; {secure_attr}Max-Age={ABSOLUTE_SECS}"
     )
 }
 
 /// Build a `Set-Cookie` header value that clears the session. The `Path`
-/// attribute must match what was used to set the cookie — see
-/// [`set_cookie`].
-pub fn clear_cookie(path: &str) -> String {
+/// and `Secure` attributes must match what was used to set the cookie —
+/// see [`set_cookie`].
+pub fn clear_cookie(path: &str, secure: bool) -> String {
     let p = if path.is_empty() { "/" } else { path };
-    format!("{COOKIE_NAME}=; Path={p}; HttpOnly; SameSite=Lax; Secure; Max-Age=0")
+    let secure_attr = if secure { "Secure; " } else { "" };
+    format!("{COOKIE_NAME}=; Path={p}; HttpOnly; SameSite=Lax; {secure_attr}Max-Age=0")
 }
 
 /// Configure a background task that deletes expired sessions every hour.

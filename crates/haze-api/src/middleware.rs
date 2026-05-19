@@ -87,6 +87,18 @@ fn extract_cookie(header_value: &str, name: &str) -> Option<String> {
     None
 }
 
+/// True when the request reached the server over HTTPS, judged from
+/// `X-Forwarded-Proto` (set by the reverse proxy in production). Absent or
+/// non-https header → assume plain HTTP, which is the local-dev case where
+/// the `Secure` cookie attribute would prevent the browser from storing
+/// the session cookie at all.
+pub(crate) fn is_secure_request(headers: &axum::http::HeaderMap) -> bool {
+    headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|s| s.eq_ignore_ascii_case("https"))
+}
+
 /// Extractor for read endpoints that should also work without
 /// authentication when public mode is enabled.
 ///

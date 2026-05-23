@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{
-    chunk::{ChunkEncodeError, encode_chunk},
+    chunk::{ChunkEncodeError, ZSTD_LEVEL_G0, encode_chunk},
     format::{chunk_filename, parse_chunk_filename},
     wal,
 };
@@ -252,6 +252,7 @@ impl HostWriter {
                     end,
                     0, // raw resolution
                     0, // generation 0 - per-window chunk
+                    ZSTD_LEVEL_G0,
                     &records,
                 )?;
                 let _ = fs::remove_file(path);
@@ -350,6 +351,7 @@ impl HostWriter {
             chunk.end_ts,
             0, // raw resolution
             0, // generation 0 - per-window chunk
+            ZSTD_LEVEL_G0,
             &chunk.samples,
         )?;
         let _ = fs::remove_file(&chunk.wal_path);
@@ -419,7 +421,10 @@ fn chunks_for_seq(chunks_dir: &Path, seq: u64) -> Result<Option<PathBuf>, HzcErr
 
 /// Encode + atomically rename in a chunk file. Shared by the writer's
 /// normal seal path, the crash-recovery path, and the compactor - including
-/// the rollup pass that emits `generation = 1` daily bundles.
+/// the rollup passes that emit higher-generation bundles. `level` is the
+/// zstd compression level; use `zstd_level_for_generation(generation)` for
+/// the default per-generation policy.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn seal_chunk_inline(
     host_dir: &Path,
     seq: u64,
@@ -427,9 +432,10 @@ pub(super) fn seal_chunk_inline(
     end_ts: i64,
     resolution_secs: u32,
     generation: u8,
+    level: i32,
     samples: &[(i64, Slot)],
 ) -> Result<(), HzcError> {
-    let bytes = encode_chunk(samples)?;
+    let bytes = encode_chunk(samples, level)?;
     let filename = chunk_filename(seq, resolution_secs, generation, start_ts, end_ts);
     let chunks_dir = host_dir.join(CHUNKS_DIR);
     fs::create_dir_all(&chunks_dir)?;

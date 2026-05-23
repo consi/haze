@@ -21,8 +21,9 @@ pub mod writer;
 
 pub use chunk::{ChunkDecodeError, ChunkEncodeError, ChunkHeader, decode_chunk, encode_chunk};
 pub use compactor::{
-    CompactReport, DEFAULT_ROLLUP_SETTLED_AFTER_SECS, MigrationReport, RollupReport, compact_host,
-    rollup_host,
+    CompactReport, DEFAULT_ROLLUP_G2_SETTLED_AFTER_SECS, DEFAULT_ROLLUP_G3_SETTLED_AFTER_SECS,
+    DEFAULT_ROLLUP_SETTLED_AFTER_SECS, MigrationReport, RollupReport, compact_host, rollup_g2_host,
+    rollup_g3_host, rollup_host, rollup_settled_months_in_dir, rollup_settled_years_in_dir,
 };
 pub use format::{
     ChunkRef, FilenameError, chunk_filename, is_legacy_chunk_name, parse_chunk_filename,

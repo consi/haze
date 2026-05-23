@@ -294,6 +294,12 @@ pub async fn run(cfg: Config) -> Result<()> {
                 let settled_after = settings::rollup_settled_after_secs(&pool)
                     .await
                     .unwrap_or(settings::DEFAULT_ROLLUP_SETTLED_AFTER_SECS);
+                let settled_after_g2 = settings::rollup_g2_settled_after_secs(&pool)
+                    .await
+                    .unwrap_or(settings::DEFAULT_ROLLUP_G2_SETTLED_AFTER_SECS);
+                let settled_after_g3 = settings::rollup_g3_settled_after_secs(&pool)
+                    .await
+                    .unwrap_or(settings::DEFAULT_ROLLUP_G3_SETTLED_AFTER_SECS);
                 let pause_ms = settings::rollup_inter_host_pause_ms(&pool)
                     .await
                     .unwrap_or(settings::DEFAULT_ROLLUP_INTER_HOST_PAUSE_MS);
@@ -308,10 +314,15 @@ pub async fn run(cfg: Config) -> Result<()> {
                 let data_dir_inner = data_dir.clone();
                 let host_locks_inner = host_locks.clone();
                 let join = tokio::task::spawn_blocking(move || {
-                    let mut totals = (0usize, 0usize, 0usize, 0usize, 0u64, 0u64, 0usize);
-                    // (bundled_days, source_chunks, migrated, quarantined,
-                    //  bytes_before, bytes_after, failed_hosts)
+                    let mut totals = (
+                        0usize, 0usize, 0usize, 0usize, 0u64, 0u64, 0usize, 0usize, 0usize,
+                    );
+                    // (g1_bundled_days, g1_source_chunks, migrated, quarantined,
+                    //  bytes_before, bytes_after, failed_hosts,
+                    //  g2_bundled_months, g3_bundled_years)
                     let settled_after_i64 = i64::from(settled_after);
+                    let settled_after_g2_i64 = i64::from(settled_after_g2);
+                    let settled_after_g3_i64 = i64::from(settled_after_g3);
                     let pause = std::time::Duration::from_millis(u64::from(pause_ms));
                     for uuid in hosts {
                         let lock = host_lock(&host_locks_inner, uuid);
@@ -319,6 +330,7 @@ pub async fn run(cfg: Config) -> Result<()> {
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
                         let host_started = std::time::Instant::now();
+                        // G1 daily.
                         match haze_store::rollup_host(&data_dir_inner, uuid, now, settled_after_i64)
                         {
                             Ok((migration, rollup)) => {
@@ -337,13 +349,70 @@ pub async fn run(cfg: Config) -> Result<()> {
                                         quarantined = migration.quarantined,
                                         tmp_removed = migration.tmp_removed,
                                         elapsed_ms = host_started.elapsed().as_millis() as u64,
-                                        "rollup host done"
+                                        "rollup host G1 done"
                                     );
                                 }
                             }
                             Err(e) => {
                                 totals.6 += 1;
-                                tracing::warn!(%uuid, error = ?e, "rollup host failed");
+                                tracing::warn!(%uuid, error = ?e, "rollup host G1 failed");
+                                drop(guard);
+                                if !pause.is_zero() {
+                                    std::thread::sleep(pause);
+                                }
+                                continue;
+                            }
+                        }
+                        // G2 monthly.
+                        match haze_store::rollup_g2_host(
+                            &data_dir_inner,
+                            uuid,
+                            now,
+                            settled_after_g2_i64,
+                        ) {
+                            Ok(rollup) => {
+                                totals.7 += rollup.bundled_days;
+                                totals.1 += rollup.source_chunks_consumed;
+                                totals.4 += rollup.bytes_before;
+                                totals.5 += rollup.bytes_after;
+                                if rollup.did_work() {
+                                    tracing::info!(
+                                        %uuid,
+                                        bundled_months = rollup.bundled_days,
+                                        source_chunks = rollup.source_chunks_consumed,
+                                        "rollup host G2 done"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                totals.6 += 1;
+                                tracing::warn!(%uuid, error = ?e, "rollup host G2 failed");
+                            }
+                        }
+                        // G3 yearly.
+                        match haze_store::rollup_g3_host(
+                            &data_dir_inner,
+                            uuid,
+                            now,
+                            settled_after_g3_i64,
+                        ) {
+                            Ok(rollup) => {
+                                totals.8 += rollup.bundled_days;
+                                totals.1 += rollup.source_chunks_consumed;
+                                totals.4 += rollup.bytes_before;
+                                totals.5 += rollup.bytes_after;
+                                if rollup.did_work() {
+                                    tracing::info!(
+                                        %uuid,
+                                        bundled_years = rollup.bundled_days,
+                                        source_chunks = rollup.source_chunks_consumed,
+                                        "rollup host G3 done"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                totals.6 += 1;
+                                tracing::warn!(%uuid, error = ?e, "rollup host G3 failed");
                             }
                         }
                         drop(guard);
@@ -363,6 +432,8 @@ pub async fn run(cfg: Config) -> Result<()> {
                         bytes_before,
                         bytes_after,
                         failed_hosts,
+                        bundled_months,
+                        bundled_years,
                     )) => {
                         let elapsed_ms = run_started.elapsed().as_millis() as u64;
                         if elapsed_ms > u64::from(interval) * 1_000 {
@@ -375,6 +446,8 @@ pub async fn run(cfg: Config) -> Result<()> {
                         tracing::info!(
                             host_count,
                             bundled_days,
+                            bundled_months,
+                            bundled_years,
                             source_chunks,
                             migrated,
                             quarantined,

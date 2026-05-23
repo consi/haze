@@ -23,9 +23,29 @@
 //! extension makes the format obvious to anyone poking the directory with
 //! `file(1)`.
 
+use std::hash::Hasher;
 use std::path::{Path, PathBuf};
 
 pub const CHUNK_EXTENSION: &str = ".hzc.zst";
+
+/// Top bit reserved for deterministic bundle sequence numbers. G0 seqs come
+/// from the writer's `Meta::next_seq` and stay well below this, so the two
+/// namespaces never collide.
+const BUNDLE_SEQ_FLAG: u64 = 1u64 << 63;
+
+/// Deterministic sequence number for a higher-generation bundle.
+///
+/// Derived from `(generation, resolution_secs, start_ts)`. Two crash-and-
+/// retry passes for the same logical bundle produce the same seq, so the
+/// second write hits the same target filename and overwrites cleanly via
+/// tmp+rename rather than creating a duplicate.
+pub fn bundle_seq(generation: u8, resolution_secs: u32, start_ts: i64) -> u64 {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    h.write_u8(generation);
+    h.write_u32(resolution_secs);
+    h.write_i64(start_ts);
+    (h.finish() & !BUNDLE_SEQ_FLAG) | BUNDLE_SEQ_FLAG
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum FilenameError {

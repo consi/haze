@@ -21,6 +21,8 @@ pub const KEY_COMPACTOR_INTERVAL_SECS: &str = "hzc.compactor_interval_secs";
 pub const KEY_ROLLUP_INTERVAL_SECS: &str = "hzc.rollup_interval_secs";
 pub const KEY_ROLLUP_SETTLED_AFTER_SECS: &str = "hzc.rollup_settled_after_secs";
 pub const KEY_ROLLUP_INTER_HOST_PAUSE_MS: &str = "hzc.rollup_inter_host_pause_ms";
+pub const KEY_ROLLUP_G2_SETTLED_AFTER_SECS: &str = "hzc.rollup_g2_settled_after_secs";
+pub const KEY_ROLLUP_G3_SETTLED_AFTER_SECS: &str = "hzc.rollup_g3_settled_after_secs";
 pub const KEY_WORKER_POOLS: &str = "runtime.worker_pools";
 pub const KEY_ALERTING: &str = "alerting";
 pub const KEY_HOST_DEFAULTS: &str = "hosts.defaults";
@@ -39,6 +41,16 @@ pub const DEFAULT_ROLLUP_INTERVAL_SECS: u32 = 600;
 /// midnight UTC. Long enough to let any chunk that crossed midnight finish
 /// sealing.
 pub const DEFAULT_ROLLUP_SETTLED_AFTER_SECS: u32 = 3_600;
+
+/// Settle margin before a UTC month is eligible for G2 bundling. One day
+/// past the month boundary leaves room for the G1 daily rollup to finish
+/// for every day in the month first.
+pub const DEFAULT_ROLLUP_G2_SETTLED_AFTER_SECS: u32 = 86_400;
+
+/// Settle margin before a UTC year is eligible for G3 bundling. Two days
+/// past the year boundary leaves room for the G2 monthly rollup to settle
+/// December first.
+pub const DEFAULT_ROLLUP_G3_SETTLED_AFTER_SECS: u32 = 2 * 86_400;
 
 /// Pause between hosts inside a single rollup pass. Gives the kernel
 /// breathing room for the writer's WAL flushes and other I/O on the box.
@@ -199,6 +211,52 @@ pub async fn set_rollup_settled_after_secs(
     set_raw(
         pool,
         KEY_ROLLUP_SETTLED_AFTER_SECS,
+        &value.to_string(),
+        updated_by,
+    )
+    .await
+}
+
+/// Settle margin (seconds past the UTC month boundary) before a month's
+/// G1 daily bundles are eligible for G2 monthly bundling.
+pub async fn rollup_g2_settled_after_secs(pool: &SqlitePool) -> Result<u32, SettingsError> {
+    let raw = get_raw(pool, KEY_ROLLUP_G2_SETTLED_AFTER_SECS).await?;
+    Ok(raw
+        .and_then(|v| serde_json::from_str::<u32>(v.trim()).ok())
+        .unwrap_or(DEFAULT_ROLLUP_G2_SETTLED_AFTER_SECS))
+}
+
+pub async fn set_rollup_g2_settled_after_secs(
+    pool: &SqlitePool,
+    value: u32,
+    updated_by: Option<i64>,
+) -> Result<(), SettingsError> {
+    set_raw(
+        pool,
+        KEY_ROLLUP_G2_SETTLED_AFTER_SECS,
+        &value.to_string(),
+        updated_by,
+    )
+    .await
+}
+
+/// Settle margin (seconds past the UTC year boundary) before a year's G2
+/// monthly bundles are eligible for G3 yearly bundling.
+pub async fn rollup_g3_settled_after_secs(pool: &SqlitePool) -> Result<u32, SettingsError> {
+    let raw = get_raw(pool, KEY_ROLLUP_G3_SETTLED_AFTER_SECS).await?;
+    Ok(raw
+        .and_then(|v| serde_json::from_str::<u32>(v.trim()).ok())
+        .unwrap_or(DEFAULT_ROLLUP_G3_SETTLED_AFTER_SECS))
+}
+
+pub async fn set_rollup_g3_settled_after_secs(
+    pool: &SqlitePool,
+    value: u32,
+    updated_by: Option<i64>,
+) -> Result<(), SettingsError> {
+    set_raw(
+        pool,
+        KEY_ROLLUP_G3_SETTLED_AFTER_SECS,
         &value.to_string(),
         updated_by,
     )

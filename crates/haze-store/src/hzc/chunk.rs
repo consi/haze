@@ -73,10 +73,41 @@ pub enum ChunkDecodeError {
     ColumnTruncated(&'static str),
 }
 
-/// Encode a series of `(timestamp, slot)` tuples into a self-contained
-/// zstd-compressed chunk blob. The sample sequence does not need to be
-/// sorted, but for best compression timestamps should be monotonic.
-pub fn encode_chunk(samples: &[(i64, Slot)]) -> Result<Vec<u8>, ChunkEncodeError> {
+/// zstd compression level used by the live writer and the regular tier
+/// downsampler. Optimised for write throughput - readers don't care.
+pub const ZSTD_LEVEL_G0: i32 = 3;
+/// zstd compression level used by the G1 daily-rollup bundles. Re-encode
+/// happens once per UTC day per host, so we can afford a slower encoder for
+/// a noticeably smaller file.
+pub const ZSTD_LEVEL_G1: i32 = 9;
+/// zstd compression level used by the G2 monthly-rollup bundles.
+pub const ZSTD_LEVEL_G2: i32 = 13;
+/// zstd compression level used by the G3 yearly-rollup bundles. The yearly
+/// re-encode is the heaviest single operation but it happens at most a
+/// handful of times per host per year.
+pub const ZSTD_LEVEL_G3: i32 = 15;
+
+/// Pick the default zstd level for a given chunk generation. Callers can
+/// still pass an arbitrary `level` to `encode_chunk` if they want.
+pub const fn zstd_level_for_generation(generation: u8) -> i32 {
+    match generation {
+        0 => ZSTD_LEVEL_G0,
+        1 => ZSTD_LEVEL_G1,
+        2 => ZSTD_LEVEL_G2,
+        _ => ZSTD_LEVEL_G3,
+    }
+}
+
+/// Encode a series of `(timestamp, slot)` tuples into a chunk blob.
+///
+/// Returns the self-contained zstd-compressed bytes. The sample sequence
+/// does not need to be sorted, but for best compression timestamps should
+/// be monotonic.
+///
+/// `level` is the zstd compression level. Higher = smaller output, slower
+/// encode. Decoders self-describe so the choice doesn't affect the
+/// on-disk format - existing readers can decode any level.
+pub fn encode_chunk(samples: &[(i64, Slot)], level: i32) -> Result<Vec<u8>, ChunkEncodeError> {
     let n = samples.len();
     let mut body: Vec<u8> = Vec::with_capacity(HEADER_LEN + 32 * n);
     body.extend_from_slice(MAGIC);
@@ -109,7 +140,7 @@ pub fn encode_chunk(samples: &[(i64, Slot)]) -> Result<Vec<u8>, ChunkEncodeError
         body.extend_from_slice(&bytes);
     }
 
-    let compressed = zstd::encode_all(body.as_slice(), 3)?;
+    let compressed = zstd::encode_all(body.as_slice(), level)?;
     Ok(compressed)
 }
 
@@ -279,7 +310,7 @@ mod tests {
 
     #[test]
     fn empty_chunk_round_trips() {
-        let bytes = encode_chunk(&[]).unwrap();
+        let bytes = encode_chunk(&[], ZSTD_LEVEL_G0).unwrap();
         let back = decode_chunk(&bytes).unwrap();
         assert!(back.is_empty());
     }
@@ -287,7 +318,7 @@ mod tests {
     #[test]
     fn single_sample_round_trips() {
         let s = vec![(1_700_000_000, slot(21.0))];
-        let bytes = encode_chunk(&s).unwrap();
+        let bytes = encode_chunk(&s, ZSTD_LEVEL_G0).unwrap();
         let back = decode_chunk(&bytes).unwrap();
         assert_eq!(back.len(), 1);
         assert_eq!(back[0].0, s[0].0);
@@ -303,7 +334,7 @@ mod tests {
         for i in 0..240 {
             s.push((1_700_000_000 + i * 30, slot(20.0 + (i as f32).sin() * 0.5)));
         }
-        let bytes = encode_chunk(&s).unwrap();
+        let bytes = encode_chunk(&s, ZSTD_LEVEL_G0).unwrap();
         // Raw uncompressed = 240 * (8 + 7*4) = 8 640 bytes.
         // Sinusoidal data compresses to ~50 %; steady probe data does better.
         assert!(bytes.len() < 5500, "{} bytes for 240 samples", bytes.len());
@@ -339,7 +370,7 @@ mod tests {
                 },
             ));
         }
-        let bytes = encode_chunk(&s).unwrap();
+        let bytes = encode_chunk(&s, ZSTD_LEVEL_G0).unwrap();
         // Steady data should compress aggressively.
         assert!(
             bytes.len() < 1500,
@@ -364,7 +395,7 @@ mod tests {
             (1_700_000_060, slot(22.0)),
             (1_700_000_090, Slot::NAN),
         ];
-        let bytes = encode_chunk(&s).unwrap();
+        let bytes = encode_chunk(&s, ZSTD_LEVEL_G0).unwrap();
         let back = decode_chunk(&bytes).unwrap();
         assert_eq!(back.len(), 4);
         assert!(back[1].1.is_nan());

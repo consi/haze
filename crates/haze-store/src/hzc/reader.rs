@@ -25,8 +25,9 @@ use uuid::Uuid;
 /// How many times to retry a range read if a chunk disappears between
 /// `list_chunks` and `fs::read`. Each retry re-lists, re-filters, and starts
 /// over - a higher-generation bundle published mid-read will be preferred on
-/// the next pass.
-const READ_RETRY_LIMIT: u32 = 3;
+/// the next pass. Sized to absorb the daily, monthly, and yearly rollup
+/// phases each potentially superseding a chunk during one query.
+const READ_RETRY_LIMIT: u32 = 5;
 
 /// List every chunk in `host_dir/chunks/`. Returns chunk refs sorted by
 /// `(resolution_secs ascending, start_ts ascending)`.

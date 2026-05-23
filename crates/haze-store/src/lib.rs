@@ -11,16 +11,19 @@ use sqlx::{
 };
 
 pub mod aggregate;
+pub mod clock;
 pub mod hzc;
 pub mod repo;
 pub mod series_store;
 pub mod slot;
 
 pub use aggregate::{Observation, aggregate, consolidate};
+pub use clock::{Clock, ManualClock, SystemClock, system_clock};
 pub use hzc::{
+    DEFAULT_ROLLUP_G2_SETTLED_AFTER_SECS, DEFAULT_ROLLUP_G3_SETTLED_AFTER_SECS,
     DEFAULT_ROLLUP_SETTLED_AFTER_SECS, HostWriter, HzcError, HzcStore, MigrationReport,
     RetentionTier, RollupReport, chunk_window_bounds, default_retention_tiers, host_directory,
-    read_range, read_range_in_dir, rollup_host,
+    read_range, read_range_in_dir, rollup_g2_host, rollup_g3_host, rollup_host,
 };
 pub use repo::settings::{
     AlertingSettings, DEFAULT_HOST_CHUNK_WINDOW_SECS, HostDefaults, PublicModeSettings,

@@ -13,12 +13,17 @@ use fs2::FileExt;
 use uuid::Uuid;
 
 use super::writer::{HostWriter, HzcError};
+use crate::clock::{Clock, SystemClock};
 
 const STORE_LOCK_FILE: &str = "hzc.lock";
 
 pub struct HzcStore {
     data_dir: PathBuf,
     handles: DashMap<Uuid, Arc<HostWriter>>,
+    /// Wall-clock source. Production uses `SystemClock`; tests can substitute
+    /// a `ManualClock` to step the storage lifecycle through years of
+    /// simulated activity without waiting.
+    clock: Arc<dyn Clock>,
     /// Held for the lifetime of the store - prevents two daemons from
     /// stomping on each other's chunks even before any per-host lock kicks
     /// in.
@@ -28,6 +33,13 @@ pub struct HzcStore {
 
 impl HzcStore {
     pub fn new(data_dir: impl Into<PathBuf>) -> Result<Self, HzcError> {
+        Self::new_with_clock(data_dir, Arc::new(SystemClock))
+    }
+
+    pub fn new_with_clock(
+        data_dir: impl Into<PathBuf>,
+        clock: Arc<dyn Clock>,
+    ) -> Result<Self, HzcError> {
         let data_dir: PathBuf = data_dir.into();
         std::fs::create_dir_all(&data_dir)?;
         let lock_path = data_dir.join(STORE_LOCK_FILE);
@@ -42,8 +54,16 @@ impl HzcStore {
         Ok(Self {
             data_dir,
             handles: DashMap::new(),
+            clock,
             lock,
         })
+    }
+
+    /// Shared handle to the wall-clock source. Schedulers should read "now"
+    /// through this rather than calling `chrono::Utc::now()` directly so
+    /// integration tests can pin time.
+    pub fn clock(&self) -> &Arc<dyn Clock> {
+        &self.clock
     }
 
     pub fn data_dir(&self) -> &Path {

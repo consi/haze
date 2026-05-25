@@ -50,6 +50,14 @@
     .map((s: string) => s.trim())
     .filter((s: string) => s.length > 0);
 
+  // True when this host's metadata is owned by a replication peer, in
+  // which case only the local display_name + group memberships are
+  // editable; probe type / probe config / interval / samples per period
+  // are mirrored from the source on every reconcile and an attempt to
+  // change them would be overwritten on the next pass.
+  // svelte-ignore state_referenced_locally
+  const isReplicated = host.replication_peer_id != null;
+
   // svelte-ignore state_referenced_locally
   let displayName = $state(host.display_name);
   // svelte-ignore state_referenced_locally
@@ -267,13 +275,20 @@
       err = 'Name is required.';
       return;
     }
-    if (intervalSecs < 1) {
-      err = 'Interval must be at least 1 second.';
-      return;
-    }
-    if (samplesPerPeriod < 1 || samplesPerPeriod > 1000) {
-      err = 'Samples per period must be between 1 and 1000.';
-      return;
+    // Skip probe-cadence validation for replicated hosts: those inputs
+    // aren't rendered in the modal, so `intervalSecs` / `samplesPerPeriod`
+    // hold the host's current values from the seed and would falsely
+    // fail the check if the source's cadence is outside the local
+    // bounds.
+    if (!isReplicated) {
+      if (intervalSecs < 1) {
+        err = 'Interval must be at least 1 second.';
+        return;
+      }
+      if (samplesPerPeriod < 1 || samplesPerPeriod > 1000) {
+        err = 'Samples per period must be between 1 and 1000.';
+        return;
+      }
     }
     busy = true;
 
@@ -295,13 +310,19 @@
       groupUuids.some((u) => !host.group_uuids.includes(u));
     if (groupsChanged) patch.group_uuids = groupUuids;
 
-    if (kind !== host.probe_type) patch.probe_type = kind;
-    if (JSON.stringify(newConfig) !== JSON.stringify(host.probe_config)) {
-      patch.probe_config = newConfig;
+    // Hard guard: replicated hosts only ever PATCH display_name +
+    // group_uuids. Even if a future UI change accidentally lets a probe
+    // field through, the API would reject the whole patch (see
+    // hosts_routes::update). Drop them here so the round-trip succeeds.
+    if (!isReplicated) {
+      if (kind !== host.probe_type) patch.probe_type = kind;
+      if (JSON.stringify(newConfig) !== JSON.stringify(host.probe_config)) {
+        patch.probe_config = newConfig;
+      }
+      if (intervalSecs !== host.interval_secs) patch.interval_secs = intervalSecs;
+      if (samplesPerPeriod !== host.samples_per_period)
+        patch.samples_per_period = samplesPerPeriod;
     }
-    if (intervalSecs !== host.interval_secs) patch.interval_secs = intervalSecs;
-    if (samplesPerPeriod !== host.samples_per_period)
-      patch.samples_per_period = samplesPerPeriod;
 
     try {
       if (Object.keys(patch).length > 0) {
@@ -423,41 +444,54 @@
       </div>
     </div>
 
-    <div>
-      <span style="color: var(--muted)">Probe type</span>
-      <div class="mt-0.5 grid grid-cols-2 gap-1.5">
-        {#each PROBE_OPTIONS as opt (opt.kind)}
-          <label
-            class="flex items-start gap-2 px-2 py-1.5 rounded border cursor-pointer"
-            style="border-color: var(--border); {kind === opt.kind
-              ? 'background: rgba(78, 161, 255, 0.10)'
-              : ''}"
-          >
-            <input
-              type="radio"
-              name="probe-kind"
-              value={opt.kind}
-              checked={kind === opt.kind}
-              onchange={() => (kind = opt.kind)}
-              class="mt-0.5"
-            />
-            <span class="flex-1">
-              <span class="font-semibold mono">{opt.label}</span>
-              <span class="block text-[10px]" style="color: var(--muted)">
-                {opt.description}
-              </span>
-            </span>
-          </label>
-        {/each}
+    {#if isReplicated}
+      <div
+        class="rounded border p-2 text-[11px]"
+        style="border-color: var(--border); background: rgba(78, 161, 255, 0.06)"
+      >
+        <strong>Managed by replication.</strong> The probe type, target
+        config, sampling interval and samples per period are mirrored from
+        the source peer on every reconcile. You can still rename this host
+        locally and adjust its group memberships.
       </div>
-      {#if kind !== host.probe_type}
-        <p class="text-[10px] mt-1" style="color: var(--latency-warn)">
-          ⚠ Switching probe type: existing chunks stay as-is. The series
-          will hold mixed semantics across the switch point.
-        </p>
-      {/if}
-    </div>
+    {:else}
+      <div>
+        <span style="color: var(--muted)">Probe type</span>
+        <div class="mt-0.5 grid grid-cols-2 gap-1.5">
+          {#each PROBE_OPTIONS as opt (opt.kind)}
+            <label
+              class="flex items-start gap-2 px-2 py-1.5 rounded border cursor-pointer"
+              style="border-color: var(--border); {kind === opt.kind
+                ? 'background: rgba(78, 161, 255, 0.10)'
+                : ''}"
+            >
+              <input
+                type="radio"
+                name="probe-kind"
+                value={opt.kind}
+                checked={kind === opt.kind}
+                onchange={() => (kind = opt.kind)}
+                class="mt-0.5"
+              />
+              <span class="flex-1">
+                <span class="font-semibold mono">{opt.label}</span>
+                <span class="block text-[10px]" style="color: var(--muted)">
+                  {opt.description}
+                </span>
+              </span>
+            </label>
+          {/each}
+        </div>
+        {#if kind !== host.probe_type}
+          <p class="text-[10px] mt-1" style="color: var(--latency-warn)">
+            ⚠ Switching probe type: existing chunks stay as-is. The series
+            will hold mixed semantics across the switch point.
+          </p>
+        {/if}
+      </div>
+    {/if}
 
+    {#if !isReplicated}
     <fieldset class="rounded border p-3" style="border-color: var(--border)">
       <legend class="px-1 text-[10px] uppercase tracking-wider" style="color: var(--muted)">
         {kind.replace('_', ' ')} settings
@@ -637,6 +671,7 @@
       The scheduler restarts the probe whenever you save - changes apply
       on the next probe period.
     </div>
+    {/if}
 
     {#if err}
       <p style="color: var(--latency-bad)">{err}</p>

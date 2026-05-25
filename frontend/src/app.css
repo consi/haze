@@ -30,6 +30,10 @@ body {
   --smoke-inner-text: #a4aab4;
   --btn-bg: #6b7280;
   --btn-text: #0b0d10;
+  /* Replicated host/group name colour. Distinct from `--fg` and `--muted`
+   * so an at-a-glance scan tells replicated rows apart from locally-probed
+   * ones, while still being legible against `--bg`. */
+  --fg-replicated: #5a6068;
 }
 
 [data-theme='light'] {
@@ -54,6 +58,9 @@ body {
    * borders, not so dark that it reads as "danger". */
   --btn-bg: #4b5563;
   --btn-text: #ffffff;
+  /* Replicated host/group name colour on light theme. Picked to read as
+   * "secondary" without colliding with the `--muted` bullet/badge colour. */
+  --fg-replicated: #3a3a3a;
 }
 
 body {

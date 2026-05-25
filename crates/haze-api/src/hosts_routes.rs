@@ -243,6 +243,29 @@ pub(crate) async fn update(
         return Err(ApiError::Forbidden);
     }
 
+    // Replicated hosts: only the local display name and group
+    // memberships can be edited. The probe type / config / cadence are
+    // mirrored from the source on every reconcile, and trying to set
+    // them locally would either be overwritten on the next pass or, if
+    // the local probe were also kicked off, double-count samples.
+    // Reject the patch outright so the API enforces what the UI gates.
+    let existing = hosts::get_by_uuid(&state.pool, uuid)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let is_replicated = existing.replication_peer_id.is_some();
+    if is_replicated
+        && (req.probe_type.is_some()
+            || req.probe_config.is_some()
+            || req.interval_secs.is_some()
+            || req.samples_per_period.is_some())
+    {
+        return Err(ApiError::Validation(
+            "host is owned by replication; only display_name and group_uuids \
+             can be changed locally (probe params are mirrored from the source)"
+                .into(),
+        ));
+    }
+
     // Validate any probe-related changes BEFORE touching the DB so a
     // malformed request can't leave half a patch applied.
     if let Some(pt) = req.probe_type.as_deref() {
@@ -287,23 +310,24 @@ pub(crate) async fn update(
     )
     .await?;
 
-    // Restart the scheduled probe with the post-patch state. Cheap
-    // (kills the existing tokio task, spawns a fresh one), and ensures
-    // changes to probe_type / probe_config / interval / samples take
-    // effect immediately instead of waiting for the next process
-    // restart. No-op-ish if only display_name / group_uuids changed,
-    // but the cost is one task restart per host edit - acceptable.
-    let kind = parse_kind(&host.probe_type)?;
-    let probe_config: serde_json::Value =
-        serde_json::from_str(&host.probe_config).unwrap_or(serde_json::Value::Null);
-    state.scheduler.restart(HostSpec {
-        uuid: host.uuid_typed(),
-        probe_type: kind,
-        probe_config,
-        interval_secs: host.interval_secs as u32,
-        samples_per_period: host.samples_per_period as u32,
-        chunk_window_secs: host.chunk_window_secs as u32,
-    });
+    // Restart the scheduled probe with the post-patch state. Skip
+    // entirely for replicated hosts - they have no local probe to
+    // restart, and any restart attempt would briefly run the placeholder
+    // `{}` config as a real probe, which is what we just made
+    // impossible at the bootstrap layer. Local hosts behave as before.
+    if !is_replicated {
+        let kind = parse_kind(&host.probe_type)?;
+        let probe_config: serde_json::Value =
+            serde_json::from_str(&host.probe_config).unwrap_or(serde_json::Value::Null);
+        state.scheduler.restart(HostSpec {
+            uuid: host.uuid_typed(),
+            probe_type: kind,
+            probe_config,
+            interval_secs: host.interval_secs as u32,
+            samples_per_period: host.samples_per_period as u32,
+            chunk_window_secs: host.chunk_window_secs as u32,
+        });
+    }
 
     tracing::info!(
         host_uuid = %host.uuid_typed(),
@@ -610,6 +634,12 @@ pub(crate) struct HostResp {
     pub chunk_window_secs: i64,
     pub enabled: bool,
     pub created_at: i64,
+    /// Set when this host's metadata came in via replication from a
+    /// remote peer. The frontend's edit modal hides probe-config inputs
+    /// for these hosts and the API rejects probe-* PATCH fields with
+    /// 422; only `display_name` + `group_uuids` are editable locally.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replication_peer_id: Option<i64>,
 }
 
 impl From<Host> for HostResp {
@@ -627,6 +657,7 @@ impl From<Host> for HostResp {
             chunk_window_secs: h.chunk_window_secs,
             enabled: h.enabled != 0,
             created_at: h.created_at,
+            replication_peer_id: h.replication_peer_id,
         }
     }
 }

@@ -60,6 +60,8 @@ pub enum ChangeKind {
     Users,
     /// System settings (storage, workers, alerting tunables, host defaults).
     Settings,
+    /// Replication peer / rule / inbound slot CRUD or worker-state change.
+    Replication,
 }
 
 impl ChangeKind {
@@ -70,6 +72,7 @@ impl ChangeKind {
             Self::Webhooks => "webhooks",
             Self::Users => "users",
             Self::Settings => "settings",
+            Self::Replication => "replication",
         }
     }
 }

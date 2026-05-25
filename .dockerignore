@@ -1,0 +1,16 @@
+# Build artifacts that should never enter the docker context: they're
+# either OS-specific (macOS host build outputs) or regenerated inside the
+# multi-stage build itself.
+target/
+.cargo-cache/
+.cargo-docker/
+frontend/node_modules/
+frontend/build/
+frontend/.svelte-kit/
+node_modules/
+**/.DS_Store
+.git/
+data/
+dist/
+testdata/
+.claude/

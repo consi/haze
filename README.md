@@ -71,12 +71,16 @@ docker run --rm \
     -p 4420:4420 \
     -v haze-data:/var/lib/haze \
     --ulimit nofile=65536:65536 \
+    --cap-add NET_RAW \
+    --sysctl net.ipv4.ping_group_range="0 65535" \
     ghcr.io/consi/haze:latest
 ```
 
 The image is distroless (`gcr.io/distroless/static-debian12:nonroot`) and ships only the static binary. Multi-arch (`linux/amd64`, `linux/arm64`).
 
 The `--ulimit` flag matches the `LimitNOFILE=65536` the systemd `.deb` install applies. Each monitored host keeps two file descriptors open (lock + active WAL); a deployment of ~400 hosts sits within ~100 FDs of the kernel default of 1024, and a burst of parallel `/series` requests can push the process over. Skip the flag and you'll see `EMFILE` / "Too many open files" once you scale past a couple of hundred hosts.
+
+`--cap-add NET_RAW` + the `ping_group_range` sysctl let the non-root container open ICMP sockets - required for the `ping` probe. Drop both if you don't need ping probes (you can still use `dns`, `tcp_connect`, `tls_connect`, `http_ttfb`, `http_total`).
 
 ## Quick start
 

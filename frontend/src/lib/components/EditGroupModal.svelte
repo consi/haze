@@ -24,6 +24,13 @@
   let busy = $state(false);
   let err = $state<string | null>(null);
 
+  // Replicated groups are owned by an upstream peer: only the local
+  // display name can be changed (it's a label on this instance), the
+  // parent placement is fixed because the replication worker enforces
+  // it on every reconcile pass.
+  // svelte-ignore state_referenced_locally
+  const isReplicated = group.replication_peer_id != null;
+
   // Forbidden parents: the group itself plus everything in its subtree.
   // Moving X under one of X's descendants is a cycle and the backend
   // rejects it with 422; hide it from the dropdown so the user doesn't
@@ -133,25 +140,38 @@
       />
     </label>
 
-    <label class="block">
-      <span style="color: var(--muted)">Parent</span>
-      <select
-        bind:value={parentUuid}
-        class="w-full mt-0.5 px-2 py-1 rounded border"
-        style={inputStyle}
+    {#if isReplicated}
+      <div
+        class="rounded border p-2 text-[11px]"
+        style="border-color: var(--border); background: rgba(78, 161, 255, 0.06)"
       >
-        <option value={null}>- root (no parent) -</option>
-        {#each allGroups as g (g.uuid)}
-          {#if !forbidden.has(g.uuid)}
-            <option value={g.uuid}>{breadcrumb(g)}</option>
-          {/if}
-        {/each}
-      </select>
-      <span class="block text-[10px] mt-1" style="color: var(--muted)">
-        Cycles are filtered out: you can't move a group under itself or one of its descendants.
-        Moving rewrites the path of every group and host underneath, in a single transaction.
-      </span>
-    </label>
+        <strong>Managed by replication.</strong> Placement in the tree is
+        controlled by the replication rule on the source. You can rename
+        this group locally; the rename is preserved across reconciles
+        unless the source itself renames it, in which case the local
+        rename is overwritten.
+      </div>
+    {:else}
+      <label class="block">
+        <span style="color: var(--muted)">Parent</span>
+        <select
+          bind:value={parentUuid}
+          class="w-full mt-0.5 px-2 py-1 rounded border"
+          style={inputStyle}
+        >
+          <option value={null}>- root (no parent) -</option>
+          {#each allGroups as g (g.uuid)}
+            {#if !forbidden.has(g.uuid)}
+              <option value={g.uuid}>{breadcrumb(g)}</option>
+            {/if}
+          {/each}
+        </select>
+        <span class="block text-[10px] mt-1" style="color: var(--muted)">
+          Cycles are filtered out: you can't move a group under itself or one of its descendants.
+          Moving rewrites the path of every group and host underneath, in a single transaction.
+        </span>
+      </label>
+    {/if}
 
     {#if err}
       <p style="color: var(--latency-bad)">{err}</p>

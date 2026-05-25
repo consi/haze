@@ -17,12 +17,12 @@ use std::{
 
 use anyhow::{Context, Result};
 use dashmap::DashMap;
-use haze_store::{HzcStore, SeriesStore, WorkerPools, aggregate};
+use haze_store::{HzcStore, SampleEvent, SeriesStore, WorkerPools, aggregate};
 use rand::Rng;
 use sqlx::SqlitePool;
 use surge_ping::PingIdentifier;
 use tokio::{
-    sync::{Semaphore, mpsc},
+    sync::{Semaphore, broadcast, mpsc},
     task::JoinHandle,
     time::interval,
 };
@@ -103,6 +103,12 @@ pub struct Scheduler {
     handles: Arc<DashMap<Uuid, JoinHandle<()>>>,
     cmd_tx: mpsc::UnboundedSender<SchedulerCmd>,
     cmd_rx: Option<mpsc::UnboundedReceiver<SchedulerCmd>>,
+    /// Optional fanout for the live replication SSE streams. When set,
+    /// each successful sample write is broadcast on this channel so any
+    /// active `/replication/slots/{id}/stream` consumer can forward it to
+    /// the destination instance. `None` makes the broadcast a no-op (used
+    /// in tests and for boots without the replication subsystem wired up).
+    samples_tx: Option<broadcast::Sender<SampleEvent>>,
     /// One shared ICMP client per family. Avoids spawning a raw socket and
     /// reader task per host (which used to starve the executor with 1000+
     /// concurrent recv-tasks).
@@ -149,12 +155,22 @@ impl Scheduler {
             handles: Arc::new(DashMap::new()),
             cmd_tx,
             cmd_rx: Some(cmd_rx),
+            samples_tx: None,
             ping_clients: Arc::new(PingClients::new()),
             // Start at 1 - 0 is a valid identifier but conventionally avoided.
             next_ping_id: Arc::new(AtomicU16::new(1)),
             dns_resolvers: Arc::new(DnsResolvers::new()),
             http_clients: Arc::new(HttpClients::new()),
         }
+    }
+
+    /// Wire in the replication sample-fanout channel. Optional - if never
+    /// called the broadcast is a no-op and the rest of the probe path runs
+    /// unchanged. Call this once after `new` before `run`.
+    #[must_use]
+    pub fn with_samples_tx(mut self, tx: broadcast::Sender<SampleEvent>) -> Self {
+        self.samples_tx = Some(tx);
+        self
     }
 
     pub fn handle(&self) -> SchedulerHandle {
@@ -203,6 +219,7 @@ impl Scheduler {
         let ping_id = PingIdentifier(self.next_ping_id.fetch_add(1, Ordering::Relaxed));
         let dns_resolvers = self.dns_resolvers.clone();
         let http_clients = self.http_clients.clone();
+        let samples_tx = self.samples_tx.clone();
         let id = spec.uuid;
         let handle = tokio::spawn(async move {
             if let Err(e) = host_loop(
@@ -214,6 +231,7 @@ impl Scheduler {
                 ping_id,
                 dns_resolvers,
                 http_clients,
+                samples_tx,
             )
             .await
             {
@@ -232,10 +250,16 @@ impl Scheduler {
 
     /// Load all enabled hosts from the DB and start them. Useful at boot.
     pub async fn bootstrap(&self) -> Result<()> {
+        // Skip replication-owned hosts: they have no real probe config of
+        // their own (we store a placeholder `{}`), their samples are
+        // ingested by the replication worker via SSE/range pulls from
+        // the source, and probing them locally would defeat the whole
+        // point of cross-instance replication. They live in `hosts` only
+        // so the tree + alerts + UI can reference them by UUID.
         let rows: Vec<BootstrapRow> = sqlx::query_as(
             "SELECT uuid, probe_type, probe_config, interval_secs, samples_per_period, \
                     chunk_window_secs \
-             FROM hosts WHERE enabled = 1",
+             FROM hosts WHERE enabled = 1 AND replication_peer_id IS NULL",
         )
         .fetch_all(&self.pool)
         .await
@@ -355,6 +379,7 @@ async fn host_loop(
     ping_id: PingIdentifier,
     dns_resolvers: Arc<DnsResolvers>,
     http_clients: Arc<HttpClients>,
+    samples_tx: Option<broadcast::Sender<SampleEvent>>,
 ) -> Result<()> {
     let HostSpec {
         uuid,
@@ -428,6 +453,18 @@ async fn host_loop(
                     // Mirror into the in-memory series so the alert evaluator
                     // reads from RAM instead of replaying chunks on every tick.
                     series.append(uuid, ts, slot);
+                    // Fan out to any live replication SSE streams. `send`
+                    // is fire-and-forget; an `Err` only means there are no
+                    // subscribers right now (the common case) or the
+                    // channel buffer is full (lagged receivers reconnect
+                    // via catch-up). Ignored on purpose.
+                    if let Some(tx) = samples_tx.as_ref() {
+                        let _ = tx.send(SampleEvent {
+                            host_uuid: uuid,
+                            timestamp_secs: ts,
+                            slot,
+                        });
+                    }
                 }
                 Err(e) => warn!(uuid = %uuid, error = %e, "write_sample failed"),
             },

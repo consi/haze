@@ -4,14 +4,41 @@ use std::{path::PathBuf, sync::Arc};
 
 use haze_auth::PasskeyService;
 use haze_probe::scheduler::SchedulerHandle;
-use haze_store::{HzcStore, SeriesStore};
+use haze_store::{HzcStore, SampleEvent, SeriesStore};
 use sqlx::SqlitePool;
-use tokio::sync::{Notify, broadcast};
+use tokio::sync::{Notify, Semaphore, broadcast};
+use uuid::Uuid;
 
 use crate::{
     events_routes::ChangeKind,
     rate_limit::{LimiterHandle, SsePerIpMap},
 };
+
+/// Capacity-aware wrapper around a tokio `Semaphore`.
+///
+/// `Semaphore` itself only exposes available permits; we keep the
+/// configured cap alongside it so the periodic runtime-stats logger can
+/// report `in_use / capacity` instead of "free permits". Identical
+/// shape to what the scheduler does per-probe-kind.
+#[derive(Clone)]
+pub struct ReplicationPool {
+    pub semaphore: Arc<Semaphore>,
+    pub capacity: usize,
+}
+
+impl ReplicationPool {
+    pub fn new(capacity: usize) -> Self {
+        Self {
+            semaphore: Arc::new(Semaphore::new(capacity)),
+            capacity,
+        }
+    }
+
+    pub fn in_use(&self) -> usize {
+        self.capacity
+            .saturating_sub(self.semaphore.available_permits())
+    }
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -31,6 +58,21 @@ pub struct AppState {
     /// `/api/v1/events` subscribes a receiver per connection and forwards
     /// events to the browser so open tabs refresh without polling.
     pub events: broadcast::Sender<ChangeKind>,
+    /// Broadcast channel for per-sample announcements. The probe scheduler
+    /// publishes on every successful write; the replication-source SSE
+    /// stream handler subscribes per connection and filters by the host
+    /// set that belongs to the slot's source group. Bounded - on overflow
+    /// subscribers get `Lagged` and reconnect through the catch-up path.
+    pub samples: broadcast::Sender<SampleEvent>,
+    /// Stable per-instance UUID, read once from settings at startup. Sent
+    /// in `POST /replication/slots` bodies so the source can detect cycles
+    /// and identify the destination across reconnects.
+    pub instance_uuid: Uuid,
+    /// Shared semaphore that bounds concurrent in-flight replication work
+    /// (catch-up range fetches + per-rule stream consumers). Size is the
+    /// `worker_pools.replication` setting; surfaced in the periodic stats
+    /// log line.
+    pub replication_pool: ReplicationPool,
     /// Wake-up for long-lived response handlers (currently just the SSE
     /// stream) to bail out at shutdown. Without this, axum's graceful
     /// shutdown blocks forever waiting for the held-open `/events`

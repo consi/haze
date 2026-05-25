@@ -6,6 +6,10 @@
 
 FROM --platform=$BUILDPLATFORM alpine:3 AS picker
 ARG TARGETARCH
+# `libcap` provides `setcap`; we use it below to set CAP_NET_RAW on the
+# binary so the non-root distroless runtime can open ICMP sockets for
+# `ping` probes without needing `--cap-add NET_RAW --user 0`.
+RUN apk add --no-cache libcap
 COPY dist/ /dist/
 RUN set -eux; \
     case "$TARGETARCH" in \
@@ -14,6 +18,14 @@ RUN set -eux; \
         *) echo "unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;; \
     esac; \
     chmod +x /haze; \
+    # File capability `cap_net_raw=+ep` lets surge-ping open raw ICMP
+    # sockets under uid 65532 (nonroot in distroless). Without this, the
+    # PingClients constructor logs "ICMP v4 socket unavailable" at boot
+    # and every ping probe's `build_probe` call fails on the host loop.
+    # Operators who still don't want raw sockets can drop the capability
+    # at runtime with `--cap-drop NET_RAW` (the probe just stops working
+    # for `ping` hosts; other probe kinds are unaffected).
+    setcap cap_net_raw=+ep /haze; \
     # Empty skeleton dir; COPY --chown below transfers it into the runtime
     # image so /var/lib/haze exists at the right uid/gid before the VOLUME
     # mount-point is materialised at first run.

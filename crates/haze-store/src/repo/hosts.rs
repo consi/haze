@@ -56,6 +56,11 @@ pub struct Host {
     pub created_at: i64,
     /// UUIDs of the groups this host belongs to. Empty = root-level.
     pub group_uuids: Vec<Uuid>,
+    /// `Some(peer_id)` when this host's metadata was created by replication
+    /// from a remote peer. The frontend renders the row in dark grey and
+    /// refuses probe-parameter edits when set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replication_peer_id: Option<i64>,
 }
 
 impl Host {
@@ -90,6 +95,7 @@ struct HostRow {
     chunk_window_secs: i64,
     enabled: i64,
     created_at: i64,
+    replication_peer_id: Option<i64>,
 }
 
 impl HostRow {
@@ -106,12 +112,13 @@ impl HostRow {
             enabled: self.enabled,
             created_at: self.created_at,
             group_uuids,
+            replication_peer_id: self.replication_peer_id,
         }
     }
 }
 
 const SELECT_COLS: &str = "id, uuid, display_name, probe_type, probe_config, interval_secs, \
-     samples_per_period, chunk_window_secs, enabled, created_at";
+     samples_per_period, chunk_window_secs, enabled, created_at, replication_peer_id";
 
 /// Group filter values for `list`.
 #[derive(Debug, Clone, Copy)]
@@ -261,6 +268,91 @@ pub async fn create(pool: &SqlitePool, new: NewHost<'_>) -> Result<Host, HostErr
         enabled: 1,
         created_at: now,
         group_uuids: resolved.into_iter().map(|(_, u)| u).collect(),
+        replication_peer_id: None,
+    })
+}
+
+/// Create a replication-owned host (caller supplies the source UUID).
+///
+/// Identical to `create` except (a) the caller supplies the host UUID
+/// (preserved from the source so cross-instance references remain
+/// stable) and (b) `replication_peer_id` is set so the UI / API treat
+/// the row as non-editable apart from `display_name`.
+///
+/// Returns `NameTaken` if the same `uuid` or `display_name` already
+/// exists locally. Both situations are operator-recoverable (rename or
+/// delete the colliding row, or remove the rule).
+pub async fn create_replicated(
+    pool: &SqlitePool,
+    uuid: Uuid,
+    new: NewHost<'_>,
+    peer_id: i64,
+) -> Result<Host, HostError> {
+    let display_name = new.display_name.trim();
+    if display_name.is_empty() {
+        return Err(HostError::InvalidDisplayName);
+    }
+    let uuid_bytes = uuid.as_bytes().to_vec();
+    let now = Utc::now().timestamp();
+
+    let mut unique: Vec<Uuid> = Vec::with_capacity(new.group_uuids.len());
+    for gu in new.group_uuids {
+        if !unique.contains(gu) {
+            unique.push(*gu);
+        }
+    }
+    let mut resolved: Vec<(i64, Uuid)> = Vec::with_capacity(unique.len());
+    for gu in &unique {
+        let id = groups::resolve_id(pool, *gu)
+            .await
+            .map_err(|_| HostError::GroupNotFound)?
+            .ok_or(HostError::GroupNotFound)?;
+        resolved.push((id, *gu));
+    }
+
+    let mut tx = pool.begin().await?;
+    let id = sqlx::query(
+        "INSERT INTO hosts (uuid, display_name, probe_type, probe_config, \
+                            interval_secs, samples_per_period, chunk_window_secs, \
+                            enabled, created_at, replication_peer_id) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?9)",
+    )
+    .bind(&uuid_bytes)
+    .bind(display_name)
+    .bind(new.probe_type)
+    .bind(new.probe_config)
+    .bind(new.interval_secs)
+    .bind(new.samples_per_period)
+    .bind(new.chunk_window_secs)
+    .bind(now)
+    .bind(peer_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(map_name_unique)?
+    .last_insert_rowid();
+
+    for (gid, _) in &resolved {
+        sqlx::query("INSERT INTO host_groups (host_id, group_id) VALUES (?1, ?2)")
+            .bind(id)
+            .bind(gid)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+
+    Ok(Host {
+        id,
+        uuid: uuid_bytes,
+        display_name: display_name.into(),
+        probe_type: new.probe_type.into(),
+        probe_config: new.probe_config.into(),
+        interval_secs: new.interval_secs,
+        samples_per_period: new.samples_per_period,
+        chunk_window_secs: new.chunk_window_secs,
+        enabled: 1,
+        created_at: now,
+        group_uuids: resolved.into_iter().map(|(_, u)| u).collect(),
+        replication_peer_id: Some(peer_id),
     })
 }
 

@@ -5,6 +5,7 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use uuid::Uuid;
 
 use crate::RetentionTier;
 
@@ -27,6 +28,7 @@ pub const KEY_WORKER_POOLS: &str = "runtime.worker_pools";
 pub const KEY_ALERTING: &str = "alerting";
 pub const KEY_HOST_DEFAULTS: &str = "hosts.defaults";
 pub const KEY_PUBLIC_MODE: &str = "public_mode";
+pub const KEY_INSTANCE_UUID: &str = "instance.uuid";
 
 /// How often the compactor walks the host fleet. Read live by the
 /// compactor task each cycle so changes apply without a restart.
@@ -92,6 +94,12 @@ pub struct WorkerPools {
     pub probe_http_total: u32,
     pub compactor: u32,
     pub alert_eval: u32,
+    /// Max concurrent in-flight replication operations across every peer:
+    /// catch-up range fetches, manifest reconciles, and per-rule SSE
+    /// stream consumers. The default of 16 lets a few dozen rules share
+    /// a small CPU + network budget without piling up on a slow peer.
+    #[serde(default = "default_replication_workers")]
+    pub replication: u32,
 }
 
 pub fn default_worker_pools() -> WorkerPools {
@@ -104,7 +112,12 @@ pub fn default_worker_pools() -> WorkerPools {
         probe_http_total: 512,
         compactor: 8,
         alert_eval: 32,
+        replication: default_replication_workers(),
     }
+}
+
+fn default_replication_workers() -> u32 {
+    16
 }
 
 /// Fetch the raw JSON value for `key`, or `None` if the row is missing.
@@ -444,4 +457,24 @@ pub async fn set_public_mode_settings(
 ) -> Result<(), SettingsError> {
     let json = serde_json::to_string(settings)?;
     set_raw(pool, KEY_PUBLIC_MODE, &json, updated_by).await
+}
+
+/// Stable per-instance UUID.
+///
+/// Generated on first read if missing so every running Haze process has
+/// one regardless of upgrade order. Used by replication to detect loops
+/// in multi-hop topologies and to identify the destination on
+/// `POST /replication/slots`.
+pub async fn instance_uuid(pool: &SqlitePool) -> Result<Uuid, SettingsError> {
+    if let Some(raw) = get_raw(pool, KEY_INSTANCE_UUID).await? {
+        if let Ok(parsed) = serde_json::from_str::<String>(&raw) {
+            if let Ok(u) = Uuid::parse_str(&parsed) {
+                return Ok(u);
+            }
+        }
+    }
+    let fresh = Uuid::new_v4();
+    let json = serde_json::to_string(&fresh.to_string())?;
+    set_raw(pool, KEY_INSTANCE_UUID, &json, None).await?;
+    Ok(fresh)
 }

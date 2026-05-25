@@ -26,6 +26,7 @@
   } from '$lib/timezone.svelte';
   import { base } from '$app/paths';
   import { onMount } from 'svelte';
+  import ReplicationSection from '$lib/components/ReplicationSection.svelte';
 
   // ─── Storage ──────────────────────────────────────────────────────────────
   let storageLoading = $state(true);
@@ -652,7 +653,8 @@
     { key: 'probe_http_ttfb',   label: 'HTTP TTFB probes',   hint: 'In-flight HTTP requests (time-to-first-byte).' },
     { key: 'probe_http_total',  label: 'HTTP TOTAL probes',  hint: 'In-flight HTTP requests with full body read.' },
     { key: 'compactor',         label: 'Chunk compactor',    hint: 'Parallel host directories the compactor walks.' },
-    { key: 'alert_eval',        label: 'Alert evaluator',    hint: 'Parallel (rule, host) checks per evaluation tick.' }
+    { key: 'alert_eval',        label: 'Alert evaluator',    hint: 'Parallel (rule, host) checks per evaluation tick.' },
+    { key: 'replication',       label: 'Replication',        hint: 'Concurrent replication operations (catch-up + per-rule streams).' }
   ];
 
   const DEFAULT_WORKER_POOLS: WorkerPools = {
@@ -663,7 +665,8 @@
     probe_http_ttfb: 512,
     probe_http_total: 512,
     compactor: 8,
-    alert_eval: 32
+    alert_eval: 32,
+    replication: 16
   };
 
   // Server caps. Mirror `MAX_TOTAL_POOL_BUDGET` and per-field cap in
@@ -1925,6 +1928,12 @@
         {/if}
       </section>
     </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         Replication (admin only - section hides itself if non-admin via
+         the outer `if isAdmin` gate that wraps every section above)
+         ════════════════════════════════════════════════════════════════════ -->
+    <ReplicationSection />
 
   {#if restarting}
     <div

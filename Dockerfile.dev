@@ -1,0 +1,44 @@
+# syntax=docker/dockerfile:1.7
+#
+# Dev-loop Dockerfile for the replication compose test. Builds the
+# frontend + the Rust server from source. Not used by the release
+# pipeline (which packages prebuilt static musl binaries).
+
+FROM node:22-alpine AS frontend-builder
+WORKDIR /build/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+FROM rust:1-bookworm AS rust-builder
+WORKDIR /build
+# Dependency layer: copy only the manifests so cargo caches a deps-only
+# build that survives source edits.
+COPY Cargo.toml Cargo.lock rust-toolchain.toml clippy.toml ./
+COPY crates/ ./crates/
+COPY migrations/ ./migrations/
+# Frontend build output is what `rust-embed` embeds at compile time
+# (`#[folder = "../../frontend/build"]`).
+COPY --from=frontend-builder /build/frontend/build ./frontend/build
+RUN cargo build --release --bin haze
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl libcap2-bin \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=rust-builder /build/target/release/haze /usr/bin/haze
+# Grant the binary CAP_NET_RAW as a file capability so the non-root
+# haze user can open ICMP sockets without needing to run as root. The
+# `+eip` flags make the cap effective + inheritable + permitted, which
+# is what surge_ping::Client::new needs on Linux.
+RUN setcap cap_net_raw=+eip /usr/bin/haze
+RUN useradd -u 1000 -m haze \
+    && mkdir -p /var/lib/haze \
+    && chown -R haze:haze /var/lib/haze
+USER haze
+EXPOSE 4420
+ENV HAZE_BIND=0.0.0.0:4420 \
+    HAZE_DATA_DIR=/var/lib/haze \
+    HAZE_LOG=haze=info,haze_api=info,haze_server=info,haze_store=info
+ENTRYPOINT ["/usr/bin/haze"]

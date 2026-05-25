@@ -30,6 +30,8 @@ pub struct ApiTokenRow {
     pub created_at: i64,
     pub expires_at: Option<i64>,
     pub last_used_at: Option<i64>,
+    #[serde(default)]
+    pub replication_only: i64,
 }
 
 pub async fn create(
@@ -37,6 +39,7 @@ pub async fn create(
     user_id: i64,
     name: &str,
     expires_at: Option<i64>,
+    replication_only: bool,
 ) -> Result<(i64, String), TokenError> {
     let mut raw = [0u8; TOKEN_BYTES];
     OsRng.fill_bytes(&mut raw);
@@ -44,14 +47,15 @@ pub async fn create(
     let hash = sha256(&plaintext);
     let now = Utc::now().timestamp();
     let id = sqlx::query(
-        "INSERT INTO api_tokens (user_id, name, token_hash, created_at, expires_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO api_tokens (user_id, name, token_hash, created_at, expires_at, replication_only) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
     )
     .bind(user_id)
     .bind(name)
     .bind(&hash[..])
     .bind(now)
     .bind(expires_at)
+    .bind(i64::from(replication_only))
     .execute(pool)
     .await?
     .last_insert_rowid();
@@ -63,7 +67,7 @@ pub async fn list_for_user(
     user_id: i64,
 ) -> Result<Vec<ApiTokenRow>, TokenError> {
     let rows: Vec<ApiTokenRow> = sqlx::query_as(
-        "SELECT id, user_id, name, created_at, expires_at, last_used_at \
+        "SELECT id, user_id, name, created_at, expires_at, last_used_at, replication_only \
          FROM api_tokens WHERE user_id = ?1 ORDER BY created_at DESC",
     )
     .bind(user_id)
@@ -85,18 +89,34 @@ pub async fn delete(pool: &SqlitePool, user_id: i64, token_id: i64) -> Result<()
     Ok(())
 }
 
-/// Look up the `user_id` for a Bearer token. Updates `last_used_at` opportunistically.
-pub async fn lookup_user(pool: &SqlitePool, plaintext: &str) -> Result<Option<i64>, TokenError> {
+/// Resolved bearer-token authentication.
+///
+/// Carries the user the token belongs to plus its scope flag so the
+/// middleware can reject the call early if the token is
+/// replication-only and the path isn't under `/api/v1/replication`.
+#[derive(Debug, Clone, Copy)]
+pub struct TokenAuth {
+    pub user_id: i64,
+    pub replication_only: bool,
+}
+
+/// Look up the `TokenAuth` for a Bearer token. Updates `last_used_at`
+/// opportunistically. Returns `None` for unknown / expired tokens.
+pub async fn lookup_user(
+    pool: &SqlitePool,
+    plaintext: &str,
+) -> Result<Option<TokenAuth>, TokenError> {
     if !plaintext.starts_with(TOKEN_PREFIX) {
         return Ok(None);
     }
     let hash = sha256(plaintext);
-    let row: Option<(i64, Option<i64>)> =
-        sqlx::query_as("SELECT user_id, expires_at FROM api_tokens WHERE token_hash = ?1")
-            .bind(&hash[..])
-            .fetch_optional(pool)
-            .await?;
-    let Some((user_id, expires_at)) = row else {
+    let row: Option<(i64, Option<i64>, i64)> = sqlx::query_as(
+        "SELECT user_id, expires_at, replication_only FROM api_tokens WHERE token_hash = ?1",
+    )
+    .bind(&hash[..])
+    .fetch_optional(pool)
+    .await?;
+    let Some((user_id, expires_at, replication_only)) = row else {
         return Ok(None);
     };
     let now = Utc::now().timestamp();
@@ -108,7 +128,10 @@ pub async fn lookup_user(pool: &SqlitePool, plaintext: &str) -> Result<Option<i6
         .bind(&hash[..])
         .execute(pool)
         .await;
-    Ok(Some(user_id))
+    Ok(Some(TokenAuth {
+        user_id,
+        replication_only: replication_only != 0,
+    }))
 }
 
 fn sha256(s: &str) -> [u8; 32] {

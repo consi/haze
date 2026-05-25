@@ -22,7 +22,8 @@ export const reloadKeys = $state({
   alerts: 0,
   webhooks: 0,
   users: 0,
-  settings: 0
+  settings: 0,
+  replication: 0
 });
 
 let es: EventSource | null = null;
@@ -43,6 +44,7 @@ function bumpAll() {
   reloadKeys.webhooks++;
   reloadKeys.users++;
   reloadKeys.settings++;
+  reloadKeys.replication++;
 }
 
 export function connectEvents() {
@@ -76,6 +78,9 @@ export function connectEvents() {
         break;
       case 'settings':
         reloadKeys.settings++;
+        break;
+      case 'replication':
+        reloadKeys.replication++;
         break;
       case 'all':
         // Server's "I lagged you, refetch everything" signal.

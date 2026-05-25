@@ -34,6 +34,8 @@ pub enum ApiError {
     #[error(transparent)]
     Settings(#[from] haze_store::repo::settings::SettingsError),
     #[error(transparent)]
+    Replication(#[from] haze_store::repo::replication::ReplicationError),
+    #[error(transparent)]
     Password(#[from] haze_auth::PasswordError),
     #[error(transparent)]
     Session(#[from] haze_auth::SessionError),
@@ -52,14 +54,19 @@ impl IntoResponse for ApiError {
             Self::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
             Self::NotFound
             | Self::GroupRepo(haze_store::repo::groups::GroupError::NotFound)
-            | Self::HostRepo(haze_store::repo::hosts::HostError::NotFound) => {
-                (StatusCode::NOT_FOUND, "not found")
-            }
+            | Self::HostRepo(haze_store::repo::hosts::HostError::NotFound)
+            | Self::Replication(
+                haze_store::repo::replication::ReplicationError::PeerNotFound
+                | haze_store::repo::replication::ReplicationError::RuleNotFound
+                | haze_store::repo::replication::ReplicationError::SlotNotFound,
+            ) => (StatusCode::NOT_FOUND, "not found"),
             Self::Conflict(_)
             | Self::GroupRepo(haze_store::repo::groups::GroupError::NameTaken)
-            | Self::HostRepo(haze_store::repo::hosts::HostError::NameTaken) => {
-                (StatusCode::CONFLICT, "conflict")
-            }
+            | Self::HostRepo(haze_store::repo::hosts::HostError::NameTaken)
+            | Self::Replication(
+                haze_store::repo::replication::ReplicationError::NameTaken
+                | haze_store::repo::replication::ReplicationError::RuleDuplicate,
+            ) => (StatusCode::CONFLICT, "conflict"),
             Self::Validation(_)
             | Self::GroupRepo(haze_store::repo::groups::GroupError::InvalidDisplayName)
             | Self::HostRepo(haze_store::repo::hosts::HostError::InvalidDisplayName) => {

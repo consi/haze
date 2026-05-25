@@ -157,6 +157,7 @@ fn validate_pools(p: &WorkerPools) -> ApiResult<()> {
         ("probe_http_total", p.probe_http_total),
         ("compactor", p.compactor),
         ("alert_eval", p.alert_eval),
+        ("replication", p.replication),
     ];
     let mut total: u64 = 0;
     for (name, v) in fields {

@@ -24,6 +24,9 @@ export interface Group {
   display_name: string;
   depth: number;
   created_at: number;
+  /** Set when this group originated via cross-instance replication. Frontend
+   *  renders the row in dark grey and disables edits other than rename. */
+  replication_peer_id?: number | null;
 }
 
 export interface Host {
@@ -42,6 +45,10 @@ export interface Host {
   chunk_window_secs: number;
   enabled: boolean;
   created_at: number;
+  /** Set when this host's metadata + samples come from a replication peer.
+   *  The frontend renders dark grey and disables probe-config edits when
+   *  set; only `display_name` is editable. */
+  replication_peer_id?: number | null;
 }
 
 /** One tier in the HZC retention policy. `resolution_secs: 0` means raw. */
@@ -66,6 +73,8 @@ export interface WorkerPools {
   probe_http_total: number;
   compactor: number;
   alert_eval: number;
+  /** Concurrent replication operations (catch-up + per-rule streams). */
+  replication: number;
 }
 
 export interface WorkerSettings {
@@ -208,6 +217,9 @@ export interface ServerInfo {
   /** Whether anonymous browsing is enabled on this instance. */
   public_mode_enabled: boolean;
   version: string;
+  /** Stable per-process UUID; surfaced next to the Replication section
+   *  header so operators know what they're handing to a peer. */
+  instance_uuid: string;
 }
 
 export interface WebhookTestResult {
@@ -358,15 +370,24 @@ export const api = {
       created_at: number;
       expires_at: number | null;
       last_used_at: number | null;
+      replication_only: boolean;
     }>
   > {
     return req('GET', '/user/tokens');
   },
   createMyToken(
     name: string,
-    expires_at: number | null = null
-  ): Promise<{ id: number; name: string; plaintext: string; created_at: number; expires_at: number | null }> {
-    return req('POST', '/user/tokens', { name, expires_at });
+    expires_at: number | null = null,
+    replication_only = false
+  ): Promise<{
+    id: number;
+    name: string;
+    plaintext: string;
+    created_at: number;
+    expires_at: number | null;
+    replication_only: boolean;
+  }> {
+    return req('POST', '/user/tokens', { name, expires_at, replication_only });
   },
   deleteMyToken(id: number): Promise<void> {
     return req('DELETE', `/user/tokens/${id}`);
@@ -560,8 +581,169 @@ export const api = {
     input: PublicModeSettings
   ): Promise<{ settings: PublicModeSettings }> {
     return req('PUT', '/settings/public', { settings: input });
+  },
+
+  // Replication (admin-only)
+  listReplicationPeers(limit = 20, offset = 0): Promise<Paginated<ReplicationPeer>> {
+    return paginatedReq('GET', `/replication/peers?limit=${limit}&offset=${offset}`);
+  },
+  createReplicationPeer(input: CreateReplicationPeerInput): Promise<ReplicationPeer> {
+    return req('POST', '/replication/peers', input);
+  },
+  updateReplicationPeer(uuid: string, input: UpdateReplicationPeerInput): Promise<void> {
+    return req('PATCH', `/replication/peers/${uuid}`, input);
+  },
+  deleteReplicationPeer(uuid: string): Promise<void> {
+    return req('DELETE', `/replication/peers/${uuid}`);
+  },
+  testReplicationPeer(uuid: string): Promise<ReplicationPeerTestResult> {
+    return req('POST', `/replication/peers/${uuid}/test`);
+  },
+  replicationPeerGroupsPreview(uuid: string): Promise<GroupPreview[]> {
+    return req('GET', `/replication/peers/${uuid}/groups-preview`);
+  },
+  listReplicationRules(opts?: {
+    peer_uuid?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Paginated<ReplicationRule>> {
+    const params = new URLSearchParams();
+    if (opts?.peer_uuid) params.set('peer_uuid', opts.peer_uuid);
+    params.set('limit', String(opts?.limit ?? 20));
+    params.set('offset', String(opts?.offset ?? 0));
+    return paginatedReq('GET', `/replication/rules?${params}`);
+  },
+  createReplicationRule(input: CreateReplicationRuleInput): Promise<ReplicationRule> {
+    return req('POST', '/replication/rules', input);
+  },
+  toggleReplicationRule(uuid: string, enabled: boolean): Promise<void> {
+    return req('PATCH', `/replication/rules/${uuid}`, { enabled });
+  },
+  deleteReplicationRule(uuid: string): Promise<void> {
+    return req('DELETE', `/replication/rules/${uuid}`);
+  },
+  listReplicationInbound(limit = 20, offset = 0): Promise<Paginated<ReplicationInboundSlot>> {
+    return paginatedReq('GET', `/replication/inbound?limit=${limit}&offset=${offset}`);
+  },
+  deleteReplicationInbound(slotUuid: string): Promise<void> {
+    return req('DELETE', `/replication/inbound/${slotUuid}`);
+  },
+  unblockReplicationInbound(slotUuid: string): Promise<void> {
+    return req('POST', `/replication/inbound/${slotUuid}/unblock`);
   }
 };
+
+/** Paged response wrapper. Total count comes from the `X-Total-Count` header. */
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+}
+
+async function paginatedReq<T>(method: string, path: string): Promise<Paginated<T>> {
+  const res = await doFetch(method, path);
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const j = (await res.json()) as { detail?: string };
+      if (j.detail) detail = j.detail;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(res.status, detail);
+  }
+  const items = ((await res.json()) as T[]) ?? [];
+  const totalHeader = res.headers.get('X-Total-Count');
+  const total = totalHeader ? Number(totalHeader) : items.length;
+  return { items, total };
+}
+
+export interface ReplicationPeer {
+  uuid: string;
+  name: string;
+  base_url: string;
+  source_instance_uuid: string | null;
+  upstream_chain: string[];
+  tls_skip_verify: boolean;
+  reconcile_interval_secs: number;
+  created_at: number;
+  last_contact_at: number | null;
+  last_error: string | null;
+  /** Source's `CARGO_PKG_VERSION` captured on the last successful
+   *  worker handshake. Surfaced by the Settings UI's Status column. */
+  source_version: string | null;
+  /** Latency of the last `/instance-info` round trip (ms). */
+  last_latency_ms: number | null;
+}
+
+export interface CreateReplicationPeerInput {
+  name: string;
+  base_url: string;
+  api_token: string;
+  tls_skip_verify?: boolean;
+  reconcile_interval_secs?: number;
+}
+
+export interface UpdateReplicationPeerInput {
+  name?: string;
+  api_token?: string;
+  tls_skip_verify?: boolean;
+  reconcile_interval_secs?: number;
+}
+
+export interface ReplicationPeerTestResult {
+  ok: boolean;
+  source_instance_uuid: string | null;
+  source_version: string | null;
+  latency_ms: number;
+  error: string | null;
+}
+
+export interface GroupPreview {
+  uuid: string;
+  parent_uuid: string | null;
+  display_name: string;
+  depth: number;
+}
+
+export interface ReplicationRule {
+  uuid: string;
+  peer_uuid: string;
+  peer_name: string;
+  source_group_uuid: string;
+  dest_group_uuid: string;
+  slot_uuid: string | null;
+  enabled: boolean;
+  created_at: number;
+  /** Max `last_synced_ts` across the rule's hosts. UI derives "lag" =
+   *  `now() - latest_ingested_ts` and ticks it every second locally. */
+  latest_ingested_ts?: number;
+  host_count: number;
+  last_error?: string;
+}
+
+export interface CreateReplicationRuleInput {
+  peer_uuid: string;
+  /** null = source root. */
+  source_group_uuid?: string | null;
+  /** null = local destination root. */
+  dest_group_uuid?: string | null;
+  enabled?: boolean;
+}
+
+export interface ReplicationInboundSlot {
+  slot_uuid: string;
+  peer_instance_uuid: string;
+  peer_label: string;
+  source_group_uuid: string;
+  replication_path: string[];
+  created_at: number;
+  last_stream_at: number | null;
+  host_count: number;
+  /** Set when an admin force-removed this slot. The peer's instance UUID
+   *  stays on file so reconnects from the same destination are refused
+   *  until an admin unblocks via the Inbound table action. */
+  blocked_at?: number | null;
+}
 
 export interface AdminUser {
   id: number;

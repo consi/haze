@@ -119,6 +119,7 @@
     created_at: number;
     expires_at: number | null;
     last_used_at: number | null;
+    replication_only: boolean;
   };
   let tokens = $state<Token[]>([]);
   let tokenName = $state('');
@@ -134,6 +135,8 @@
     }
   }
 
+  let tokenReplicationOnly = $state(false);
+
   async function createToken() {
     if (!tokenName.trim()) {
       tokenErr = 'Name is required';
@@ -142,9 +145,10 @@
     tokenBusy = true;
     tokenErr = null;
     try {
-      const r = await api.createMyToken(tokenName, null);
+      const r = await api.createMyToken(tokenName, null, tokenReplicationOnly);
       tokenPlaintext = { name: r.name, plaintext: r.plaintext };
       tokenName = '';
+      tokenReplicationOnly = false;
       await refreshTokens();
     } catch (e) {
       tokenErr = e instanceof Error ? e.message : String(e);
@@ -366,7 +370,18 @@
         <tbody>
           {#each tokens as t}
             <tr class="border-t" style="border-color: var(--border)">
-              <td class="py-1 pr-2">{t.name}</td>
+              <td class="py-1 pr-2">
+                {t.name}
+                {#if t.replication_only}
+                  <span
+                    class="ml-1 text-[10px] px-1 rounded"
+                    style="background: rgba(78, 161, 255, 0.15); color: var(--accent)"
+                    title="Accepted only for replication calls"
+                  >
+                    replication-only
+                  </span>
+                {/if}
+              </td>
               <td class="py-1 pr-2" style="color: var(--muted)">{fmtTs(t.created_at)}</td>
               <td class="py-1 pr-2" style="color: var(--muted)">{fmtTs(t.last_used_at)}</td>
               <td class="py-1 pr-2" style="color: var(--muted)">{fmtTs(t.expires_at)}</td>
@@ -405,6 +420,15 @@
         {tokenBusy ? 'Creating…' : 'Generate token'}
       </button>
     </div>
+    {#if auth.user?.role === 'admin'}
+      <label class="flex items-center gap-2 text-[11px] mt-2" style="color: var(--muted)">
+        <input type="checkbox" bind:checked={tokenReplicationOnly} />
+        Replication only - this token will be accepted only for
+        replication calls. Use it when handing the token to another Haze
+        instance for cross-instance pulls so it can't manage this
+        instance's hosts, settings, or users.
+      </label>
+    {/if}
     {#if tokenErr}<p class="text-xs mt-1" style="color: var(--latency-bad)">{tokenErr}</p>{/if}
   </section>
 </div>

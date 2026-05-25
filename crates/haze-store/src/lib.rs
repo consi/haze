@@ -31,7 +31,7 @@ pub use repo::settings::{
     default_worker_pools,
 };
 pub use series_store::SeriesStore;
-pub use slot::{Sample, Slot};
+pub use slot::{Sample, SampleEvent, Slot};
 
 const DB_FILENAME: &str = "haze.sqlite";
 

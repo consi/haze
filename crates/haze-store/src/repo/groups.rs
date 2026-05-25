@@ -44,6 +44,11 @@ pub struct Group {
     pub path: String,
     pub depth: i64,
     pub created_at: i64,
+    /// `Some(peer_id)` when this group was materialised by replication
+    /// from a remote peer. Frontend renders dark grey and refuses any
+    /// edit other than `display_name`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replication_peer_id: Option<i64>,
 }
 
 impl Group {
@@ -54,7 +59,7 @@ impl Group {
 
 pub async fn list_all(pool: &SqlitePool) -> Result<Vec<Group>, GroupError> {
     let rows: Vec<Group> = sqlx::query_as(
-        "SELECT id, uuid, parent_id, display_name, path, depth, created_at \
+        "SELECT id, uuid, parent_id, display_name, path, depth, created_at, replication_peer_id \
          FROM groups ORDER BY display_name, id",
     )
     .fetch_all(pool)
@@ -64,7 +69,7 @@ pub async fn list_all(pool: &SqlitePool) -> Result<Vec<Group>, GroupError> {
 
 pub async fn get(pool: &SqlitePool, id: i64) -> Result<Option<Group>, GroupError> {
     let row: Option<Group> = sqlx::query_as(
-        "SELECT id, uuid, parent_id, display_name, path, depth, created_at \
+        "SELECT id, uuid, parent_id, display_name, path, depth, created_at, replication_peer_id \
          FROM groups WHERE id = ?1",
     )
     .bind(id)
@@ -75,7 +80,7 @@ pub async fn get(pool: &SqlitePool, id: i64) -> Result<Option<Group>, GroupError
 
 pub async fn get_by_uuid(pool: &SqlitePool, uuid: Uuid) -> Result<Option<Group>, GroupError> {
     let row: Option<Group> = sqlx::query_as(
-        "SELECT id, uuid, parent_id, display_name, path, depth, created_at \
+        "SELECT id, uuid, parent_id, display_name, path, depth, created_at, replication_peer_id \
          FROM groups WHERE uuid = ?1",
     )
     .bind(uuid.as_bytes().to_vec())
@@ -159,6 +164,86 @@ pub async fn create(
         path,
         depth,
         created_at: now,
+        replication_peer_id: None,
+    })
+}
+
+/// Sibling-name lookup for merge-by-name during replication ingest.
+///
+/// Returns the group whose `(parent_id, display_name COLLATE NOCASE)`
+/// matches, or `None`. Bypasses the `ux_groups_sibling_name` unique-index
+/// violation by detecting the dup before insertion.
+pub async fn find_sibling_by_name(
+    pool: &SqlitePool,
+    parent_id: Option<i64>,
+    display_name: &str,
+) -> Result<Option<Group>, GroupError> {
+    let row: Option<Group> = sqlx::query_as(
+        "SELECT id, uuid, parent_id, display_name, path, depth, created_at, replication_peer_id \
+         FROM groups \
+         WHERE COALESCE(parent_id, -1) = COALESCE(?1, -1) \
+           AND display_name = ?2 COLLATE NOCASE \
+         LIMIT 1",
+    )
+    .bind(parent_id)
+    .bind(display_name)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row)
+}
+
+/// Create a replication-owned group.
+///
+/// Identical to `create` except the new row has `replication_peer_id`
+/// set so the UI / API treats it as non-editable (apart from
+/// `display_name`) and can render it differently.
+pub async fn create_replicated(
+    pool: &SqlitePool,
+    parent_id: Option<i64>,
+    display_name: &str,
+    peer_id: i64,
+) -> Result<Group, GroupError> {
+    let trimmed = display_name.trim();
+    if trimmed.is_empty() {
+        return Err(GroupError::InvalidDisplayName);
+    }
+    let uuid = Uuid::new_v4();
+    let segment = uuid.simple().to_string();
+    let uuid_bytes = uuid.as_bytes().to_vec();
+    let (path, depth) = match parent_id {
+        Some(pid) => {
+            let parent = get(pool, pid).await?.ok_or(GroupError::ParentNotFound)?;
+            (format!("{}{segment}/", parent.path), parent.depth + 1)
+        }
+        None => (format!("/{segment}/"), 0),
+    };
+    let now = Utc::now().timestamp();
+    sqlx::query(
+        "INSERT INTO groups (uuid, parent_id, display_name, path, depth, created_at, replication_peer_id) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    )
+    .bind(&uuid_bytes)
+    .bind(parent_id)
+    .bind(trimmed)
+    .bind(&path)
+    .bind(depth)
+    .bind(now)
+    .bind(peer_id)
+    .execute(pool)
+    .await
+    .map_err(map_name_unique)?;
+    let id = sqlx::query_scalar::<_, i64>("SELECT last_insert_rowid()")
+        .fetch_one(pool)
+        .await?;
+    Ok(Group {
+        id,
+        uuid: uuid_bytes,
+        parent_id,
+        display_name: trimmed.into(),
+        path,
+        depth,
+        created_at: now,
+        replication_peer_id: Some(peer_id),
     })
 }
 

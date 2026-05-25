@@ -175,12 +175,16 @@
     style="padding-left: {paddingRem}rem; {isActiveHost(host.uuid)
       ? 'background: rgba(78, 161, 255, 0.12);'
       : ''}"
+    title={host.replication_peer_id != null
+      ? `${host.display_name} (replicated)`
+      : host.display_name}
   >
     <span style="color: var(--muted)">•</span>
     <button
       type="button"
       onclick={() => pickHost(host.uuid)}
       class="flex-1 text-left"
+      style={host.replication_peer_id != null ? 'color: var(--fg-replicated)' : ''}
       title={host.display_name}
     >
       {truncateName(host.display_name)}

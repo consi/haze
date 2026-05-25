@@ -67,3 +67,16 @@ pub struct Sample {
     pub timestamp_secs: i64,
     pub slot: Slot,
 }
+
+/// Live sample announcement for replication SSE streams.
+///
+/// Carries the host UUID so the SSE handler can filter to subscribers
+/// watching the slot whose group contains that host. Broadcast on the
+/// channel held by `AppState.samples` whenever a probe write or
+/// replication-ingest write lands a new sample.
+#[derive(Debug, Clone, Copy)]
+pub struct SampleEvent {
+    pub host_uuid: uuid::Uuid,
+    pub timestamp_secs: i64,
+    pub slot: Slot,
+}

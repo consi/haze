@@ -26,6 +26,7 @@ fn host_lock(locks: &HostLocks, uuid: Uuid) -> Arc<std::sync::Mutex<()>> {
 }
 
 mod assets;
+mod replication;
 
 pub struct Config {
     pub bind: String,
@@ -115,7 +116,13 @@ pub async fn run(cfg: Config) -> Result<()> {
         tracing::warn!(error = ?e, "alert series snapshot restore failed; starting cold");
     }
 
-    let scheduler = Scheduler::new(hzc.clone(), series.clone(), pool.clone(), &worker_pools);
+    // Built early so the probe scheduler can publish per-sample events to
+    // it after each successful write. 4096 absorbs bursts; lagged
+    // subscribers (replication SSE streams that fall behind) get `Lagged`
+    // and reconnect through the catch-up path - no loss.
+    let (samples_tx, _) = tokio::sync::broadcast::channel(4096);
+    let scheduler = Scheduler::new(hzc.clone(), series.clone(), pool.clone(), &worker_pools)
+        .with_samples_tx(samples_tx.clone());
     let scheduler_handle = scheduler.handle();
     scheduler.bootstrap().await.context("scheduler bootstrap")?;
     tokio::spawn(async move {
@@ -128,9 +135,11 @@ pub async fn run(cfg: Config) -> Result<()> {
     // with the number of running host loops and per-pool utilisation so
     // operators can see at a glance when a pool is saturating. Cheap -
     // just inspects in-memory counters / semaphore permits.
+    let replication_pool = haze_api::ReplicationPool::new(worker_pools.replication.max(1) as usize);
     {
         let handle = scheduler_handle.clone();
         let hzc_for_stats = hzc.clone();
+        let replication_pool = replication_pool.clone();
         let tokio_workers =
             std::thread::available_parallelism().map_or(0, std::num::NonZeroUsize::get);
         tokio::spawn(async move {
@@ -140,12 +149,17 @@ pub async fn run(cfg: Config) -> Result<()> {
                 tick.tick().await;
                 let stats = handle.stats();
                 let hzc_hosts = hzc_for_stats.list_hosts().map_or(0, |h| h.len());
-                let pools = stats
+                let mut pools = stats
                     .pools
                     .iter()
                     .map(|(k, used, cap)| format!("{}={}/{}", k.as_str(), used, cap))
-                    .collect::<Vec<_>>()
-                    .join(" ");
+                    .collect::<Vec<_>>();
+                pools.push(format!(
+                    "replication={}/{}",
+                    replication_pool.in_use(),
+                    replication_pool.capacity,
+                ));
+                let pools = pools.join(" ");
                 tracing::info!(
                     tokio_workers,
                     running_hosts = stats.running_hosts,
@@ -157,6 +171,32 @@ pub async fn run(cfg: Config) -> Result<()> {
         });
     }
     tokio::spawn(haze_auth::sessions::run_cleanup_task(pool.clone()));
+
+    // 64 slots is enough headroom for bursty mutations (multi-host imports,
+    // alert state churn) without keeping much memory around - receivers
+    // that lag past 64 events get a single "refetch all" notice and
+    // continue. The actual values are tiny (`ChangeKind` is a copy enum).
+    let (events_tx, _) = tokio::sync::broadcast::channel(64);
+    // Stable per-process identity. Generated lazily by `instance_uuid` if
+    // the row was missing (e.g. first boot post-migration).
+    let instance_uuid = settings::instance_uuid(&pool)
+        .await
+        .context("loading instance uuid")?;
+    tracing::info!(%instance_uuid, "instance identity loaded");
+
+    // Replication supervisor: starts/stops a worker per enabled rule.
+    // Workers acquire permits from `replication_pool`, so a misconfigured
+    // peer can't starve probe scheduling. Logs every state transition at
+    // INFO with `rule_uuid` so an admin can follow one rule end-to-end.
+    replication::run_manager(
+        pool.clone(),
+        hzc.clone(),
+        cfg.data_dir.clone(),
+        instance_uuid,
+        replication_pool.clone(),
+        events_tx.clone(),
+        samples_tx.clone(),
+    );
 
     // Per-host mutex shared between the downsampling compactor and the
     // single-threaded daily-rollup task so they never race on the same host.
@@ -494,11 +534,6 @@ pub async fn run(cfg: Config) -> Result<()> {
         None
     };
 
-    // 64 slots is enough headroom for bursty mutations (multi-host imports,
-    // alert state churn) without keeping much memory around - receivers
-    // that lag past 64 events get a single "refetch all" notice and
-    // continue. The actual values are tiny (`ChangeKind` is a copy enum).
-    let (events_tx, _) = tokio::sync::broadcast::channel(64);
     // Shared shutdown notify: woken by `shutdown_signal()` before it
     // returns so the SSE handlers in haze-api can exit their `recv().await`
     // and let axum's graceful shutdown drain. Without this, an open
@@ -521,6 +556,9 @@ pub async fn run(cfg: Config) -> Result<()> {
             passkeys,
             series,
             events: events_tx,
+            samples: samples_tx,
+            instance_uuid,
+            replication_pool,
             shutdown: shutdown.clone(),
             cookie_path: base_url.clone(),
             limiters,
@@ -666,7 +704,11 @@ async fn ensure_bootstrap_admin(pool: &sqlx::SqlitePool) -> Result<()> {
         return Ok(());
     }
 
-    let password = generate_password(16);
+    let env_pw = std::env::var("HAZE_BOOTSTRAP_PASSWORD")
+        .ok()
+        .filter(|s| !s.is_empty());
+    let from_env = env_pw.is_some();
+    let password = env_pw.unwrap_or_else(|| generate_password(16));
     let hash = haze_auth::password::hash(&password).context("hashing bootstrap password")?;
     haze_auth::user::create(pool, "admin", Some(&hash), haze_auth::user::Role::Admin)
         .await
@@ -676,7 +718,11 @@ async fn ensure_bootstrap_admin(pool: &sqlx::SqlitePool) -> Result<()> {
     tracing::info!("==============================================================");
     tracing::info!("  Bootstrap admin user created (empty database on first boot)");
     tracing::info!("    username: admin");
-    tracing::info!("    password: {password}");
+    if from_env {
+        tracing::info!("    password: (taken from HAZE_BOOTSTRAP_PASSWORD env var; not logged)");
+    } else {
+        tracing::info!("    password: {password}");
+    }
     tracing::info!("  Sign in, then change the password via Settings -> Users.");
     tracing::info!("  This message will not appear again.");
     tracing::info!("==============================================================");

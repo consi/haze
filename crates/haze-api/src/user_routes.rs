@@ -136,6 +136,13 @@ pub(crate) struct CreateTokenReq {
     /// Optional absolute expiry, epoch seconds. `None` = never expires.
     #[serde(default)]
     expires_at: Option<i64>,
+    /// When `true`, the token is only accepted on paths under
+    /// `/api/v1/replication`. Lets an admin issue a token to another
+    /// Haze instance for cross-instance pulls without granting full
+    /// admin authority over this one. Only admins may set this; ignored
+    /// for non-admin users (their tokens never have this scope anyway).
+    #[serde(default)]
+    replication_only: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -146,6 +153,7 @@ pub(crate) struct CreateTokenResp {
     pub plaintext: String,
     pub created_at: i64,
     pub expires_at: Option<i64>,
+    pub replication_only: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -155,6 +163,7 @@ pub(crate) struct TokenResp {
     pub created_at: i64,
     pub expires_at: Option<i64>,
     pub last_used_at: Option<i64>,
+    pub replication_only: bool,
 }
 
 #[utoipa::path(
@@ -180,6 +189,7 @@ pub(crate) async fn list_tokens(
                 created_at: r.created_at,
                 expires_at: r.expires_at,
                 last_used_at: r.last_used_at,
+                replication_only: r.replication_only != 0,
             })
             .collect(),
     ))
@@ -202,9 +212,21 @@ pub(crate) async fn create_token(
     if req.name.trim().is_empty() {
         return Err(ApiError::Validation("name is required".into()));
     }
-    let (id, plaintext) = api_token::create(&state.pool, user.id, &req.name, req.expires_at)
-        .await
-        .map_err(map_token_err)?;
+    // Only admins can mint `replication_only=true` tokens. The flag itself
+    // is a permission grant ("this token is allowed past the per-instance
+    // admin gate on /replication"), and admins are the only role that
+    // already has that grant - so it makes sense to keep mint authority
+    // there. Non-admin attempts silently fall back to a normal token.
+    let replication_only = req.replication_only && user.role.is_admin();
+    let (id, plaintext) = api_token::create(
+        &state.pool,
+        user.id,
+        &req.name,
+        req.expires_at,
+        replication_only,
+    )
+    .await
+    .map_err(map_token_err)?;
     let now = chrono::Utc::now().timestamp();
     state.notify(ChangeKind::Users);
     Ok((
@@ -215,6 +237,7 @@ pub(crate) async fn create_token(
             plaintext,
             created_at: now,
             expires_at: req.expires_at,
+            replication_only,
         }),
     ))
 }

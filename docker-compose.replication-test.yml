@@ -1,0 +1,93 @@
+# 8-instance replication topology for end-to-end validation.
+#
+#   1 -> 2 -> 3 -> 4 -> 5
+#             |
+#             v
+#             6
+#   2 -> 7
+#   6 -> 8
+#   7 -> 8
+#
+# Then a final test: 1 attempting to peer FROM 8 must be refused (cycle).
+#
+# All instances:
+#   - admin user `admin` / `adminadmin` (from HAZE_BOOTSTRAP_PASSWORD)
+#   - port mapped to host: instance N -> 400N
+#   - one local ICMP probe per instance so each has its own data
+#
+# Set up via `scripts/replication_e2e_test.sh`.
+
+x-haze-base: &haze-base
+  image: haze-dev:latest
+  build:
+    context: .
+    dockerfile: Dockerfile.dev
+  restart: unless-stopped
+  # ICMP ping probes need raw sockets. NET_RAW is the minimum needed;
+  # the kernel's ping_group_range usually permits unprivileged ICMP via
+  # DGRAM, but surge-ping opens raw sockets so the capability is
+  # required for the probes seeded by the test script.
+  cap_add: ["NET_RAW"]
+  # Bigger sysctl bound for ephemeral pings + allow non-root ICMP
+  # datagram sockets up to gid 65535 (covers the haze user inside).
+  sysctls:
+    net.ipv4.ping_group_range: "0 65535"
+  environment:
+    HAZE_BOOTSTRAP_PASSWORD: adminadmin
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://127.0.0.1:4420/api/v1/server-info"]
+    interval: 3s
+    timeout: 2s
+    retries: 30
+
+services:
+  haze-1:
+    <<: *haze-base
+    container_name: haze-rep-1
+    ports: ["4001:4420"]
+    volumes: ["haze-1-data:/var/lib/haze"]
+  haze-2:
+    <<: *haze-base
+    container_name: haze-rep-2
+    ports: ["4002:4420"]
+    volumes: ["haze-2-data:/var/lib/haze"]
+  haze-3:
+    <<: *haze-base
+    container_name: haze-rep-3
+    ports: ["4003:4420"]
+    volumes: ["haze-3-data:/var/lib/haze"]
+  haze-4:
+    <<: *haze-base
+    container_name: haze-rep-4
+    ports: ["4004:4420"]
+    volumes: ["haze-4-data:/var/lib/haze"]
+  haze-5:
+    <<: *haze-base
+    container_name: haze-rep-5
+    ports: ["4005:4420"]
+    volumes: ["haze-5-data:/var/lib/haze"]
+  haze-6:
+    <<: *haze-base
+    container_name: haze-rep-6
+    ports: ["4006:4420"]
+    volumes: ["haze-6-data:/var/lib/haze"]
+  haze-7:
+    <<: *haze-base
+    container_name: haze-rep-7
+    ports: ["4007:4420"]
+    volumes: ["haze-7-data:/var/lib/haze"]
+  haze-8:
+    <<: *haze-base
+    container_name: haze-rep-8
+    ports: ["4008:4420"]
+    volumes: ["haze-8-data:/var/lib/haze"]
+
+volumes:
+  haze-1-data: {}
+  haze-2-data: {}
+  haze-3-data: {}
+  haze-4-data: {}
+  haze-5-data: {}
+  haze-6-data: {}
+  haze-7-data: {}
+  haze-8-data: {}

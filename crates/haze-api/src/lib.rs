@@ -8,25 +8,27 @@ use utoipa::{
     Modify, OpenApi,
     openapi::security::{ApiKey, ApiKeyValue, HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
+use uuid::Uuid;
 
 mod admin_routes;
 mod alerts_routes;
 mod auth_routes;
 mod error;
-mod events_routes;
+pub mod events_routes;
 mod groups_routes;
 mod hosts_routes;
 mod middleware;
 mod passkey_routes;
 pub mod rate_limit;
+pub mod replication_routes;
 mod settings_routes;
-mod state;
+pub mod state;
 mod tree_routes;
 mod user_routes;
 
 pub use events_routes::ChangeKind;
 pub use rate_limit::{LimiterHandle, SsePerIpMap, new_handle, new_sse_map};
-pub use state::AppState;
+pub use state::{AppState, ReplicationPool};
 
 pub fn api_router(state: AppState) -> Router {
     let v1 = v1_router(&state).with_state(state.clone());
@@ -90,6 +92,7 @@ pub fn v1_router(state: &AppState) -> Router<AppState> {
         .nest("/admin", admin_routes::router())
         .nest("/alerts", alerts_routes::router())
         .nest("/events", events_routes::router())
+        .nest("/replication", replication_routes::router())
         // Order matters: session_layer runs first to attach `CurrentUser`,
         // then rate_limit_layer reads that extension to bypass the limiter
         // for authenticated requests.
@@ -198,6 +201,27 @@ impl Modify for SecurityAddon {
         alerts_routes::update_webhook,
         alerts_routes::delete_webhook,
         alerts_routes::test_webhook,
+        replication_routes::instance_info,
+        replication_routes::list_peers,
+        replication_routes::get_peer,
+        replication_routes::create_peer,
+        replication_routes::update_peer,
+        replication_routes::delete_peer,
+        replication_routes::test_peer,
+        replication_routes::peer_groups_preview,
+        replication_routes::list_rules,
+        replication_routes::create_rule,
+        replication_routes::update_rule,
+        replication_routes::delete_rule,
+        replication_routes::list_inbound,
+        replication_routes::delete_inbound,
+        replication_routes::unblock_inbound,
+        replication_routes::upsert_slot,
+        replication_routes::delete_slot_route,
+        replication_routes::slot_manifest,
+        replication_routes::slot_range,
+        replication_routes::slot_ack,
+        replication_routes::slot_stream,
     ),
     components(schemas(
         ProbeDescriptor,
@@ -254,6 +278,24 @@ impl Modify for SecurityAddon {
         haze_alert::types::Direction,
         haze_alert::types::Severity,
         haze_alert::types::TargetKind,
+        replication_routes::InstanceInfoResp,
+        replication_routes::PeerResp,
+        replication_routes::CreatePeerReq,
+        replication_routes::UpdatePeerReq,
+        replication_routes::PeerTestResp,
+        replication_routes::GroupPreviewResp,
+        replication_routes::RuleResp,
+        replication_routes::CreateRuleReq,
+        replication_routes::UpdateRuleReq,
+        replication_routes::InboundSlotResp,
+        replication_routes::UpsertSlotReq,
+        replication_routes::UpsertSlotResp,
+        replication_routes::ManifestResp,
+        replication_routes::ManifestGroup,
+        replication_routes::ManifestHost,
+        replication_routes::RangeResp,
+        replication_routes::RangeSample,
+        replication_routes::AckEntry,
     )),
     tags(
         (name = "probes", description = "Available probe types and their config schemas"),
@@ -265,7 +307,8 @@ impl Modify for SecurityAddon {
         (name = "tree", description = "Combined group + host listing for the sidebar"),
         (name = "settings", description = "System-wide settings (admin only)"),
         (name = "admin", description = "Admin user management (admin only)"),
-        (name = "alerts", description = "Alert rules, current states, and the webhook library")
+        (name = "alerts", description = "Alert rules, current states, and the webhook library"),
+        (name = "replication", description = "Cross-instance time-series replication (admin-only)")
     )
 )]
 struct ApiDoc;
@@ -365,6 +408,10 @@ struct ServerInfo {
     public_mode_enabled: bool,
     /// Server version (`CARGO_PKG_VERSION`).
     version: String,
+    /// Stable per-instance UUID. Surfaced so the Settings page can show
+    /// `My instance id: …` next to the Replication section without
+    /// hitting the admin-only `/replication/instance-info` endpoint.
+    instance_uuid: Uuid,
 }
 
 #[utoipa::path(
@@ -386,6 +433,7 @@ async fn server_info(State(state): State<AppState>) -> Json<ServerInfo> {
         passkeys_enabled: state.passkeys.is_some(),
         public_mode_enabled,
         version: env!("CARGO_PKG_VERSION").to_string(),
+        instance_uuid: state.instance_uuid,
     })
 }
 

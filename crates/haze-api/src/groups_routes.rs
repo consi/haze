@@ -34,6 +34,10 @@ pub(crate) struct GroupResp {
     pub display_name: String,
     pub depth: i64,
     pub created_at: i64,
+    /// Set when this group was materialised via cross-instance
+    /// replication. UI uses it to gate the edit modal (rename only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replication_peer_id: Option<i64>,
 }
 
 /// Build a `GroupResp` from a repo `Group`.
@@ -47,6 +51,7 @@ pub(crate) fn to_resp(g: Group, parents: &std::collections::HashMap<i64, Uuid>) 
         display_name: g.display_name,
         depth: g.depth,
         created_at: g.created_at,
+        replication_peer_id: g.replication_peer_id,
     }
 }
 
@@ -100,6 +105,7 @@ pub(crate) async fn get_one(
         display_name: g.display_name,
         depth: g.depth,
         created_at: g.created_at,
+        replication_peer_id: g.replication_peer_id,
     }))
 }
 
@@ -175,6 +181,7 @@ pub(crate) async fn create(
             display_name: g.display_name,
             depth: g.depth,
             created_at: g.created_at,
+            replication_peer_id: g.replication_peer_id,
         }),
     ))
 }

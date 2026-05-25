@@ -7,9 +7,9 @@
 
 use axum::{
     extract::{FromRequestParts, Request, State},
-    http::{header, request::Parts},
+    http::{StatusCode, header, request::Parts},
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use haze_auth::{
     CurrentUser, api_token,
@@ -42,6 +42,7 @@ pub async fn session_layer(
     }
 
     // 2. Bearer token (machine clients), only if no cookie session attached.
+    let mut bearer_replication_only = false;
     if req.extensions().get::<CurrentUser>().is_none() {
         if let Some(bearer) = req
             .headers()
@@ -50,8 +51,8 @@ pub async fn session_layer(
             .and_then(|s| s.strip_prefix("Bearer ").map(str::to_owned))
         {
             match api_token::lookup_user(&state.pool, &bearer).await {
-                Ok(Some(user_id)) => {
-                    if let Ok(Some(row)) = user::find_by_id(&state.pool, user_id).await {
+                Ok(Some(auth)) => {
+                    if let Ok(Some(row)) = user::find_by_id(&state.pool, auth.user_id).await {
                         let role = row.role.parse::<Role>().unwrap_or(Role::Disabled);
                         // Reject Bearer auth for disabled accounts - same gate
                         // as the login endpoint so tokens stop working when an
@@ -63,6 +64,7 @@ pub async fn session_layer(
                                 username: row.username,
                                 role,
                             });
+                            bearer_replication_only = auth.replication_only;
                         }
                     }
                 }
@@ -72,7 +74,29 @@ pub async fn session_layer(
         }
     }
 
+    // Scope gate: a `replication_only` bearer token only opens the
+    // `/api/v1/replication/*` slice of the API. Any other path returns
+    // 403 even though the token's owner is otherwise admin. Cookie
+    // sessions are always full-scope (browsers authenticate the whole
+    // user, not a scoped token).
+    if bearer_replication_only && !is_replication_path(req.uri().path()) {
+        tracing::info!(
+            path = req.uri().path(),
+            "rejecting bearer call: token is replication_only and path is outside scope"
+        );
+        return (StatusCode::FORBIDDEN, "token scope is replication-only\n").into_response();
+    }
+
     next.run(req).await
+}
+
+fn is_replication_path(path: &str) -> bool {
+    // The session_layer runs on the `/v1` nested router, so by the time
+    // we see a request the `/api/v1` prefix is already stripped off and
+    // the path looks like `/replication/...` (or just `/replication`).
+    // Match both forms.
+    let normalized = path.trim_end_matches('/');
+    normalized == "/replication" || normalized.starts_with("/replication/")
 }
 
 fn extract_cookie(header_value: &str, name: &str) -> Option<String> {

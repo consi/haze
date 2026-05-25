@@ -11,6 +11,5 @@ node_modules/
 **/.DS_Store
 .git/
 data/
-dist/
 testdata/
 .claude/

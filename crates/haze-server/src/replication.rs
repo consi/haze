@@ -589,7 +589,7 @@ async fn run_rule_attempt(
                             match handle_sse_event(
                                 pool, hzc, data_dir, rule, peer, slot_uuid,
                                 &event, &mut pending_acks, events, samples,
-                                write_cursors,
+                                write_cursors, &client,
                             ).await {
                                 Ok(true) => {}
                                 Ok(false) => {
@@ -1039,112 +1039,21 @@ async fn backfill_host(
             from = earliest;
         }
     }
-    // Detect sparser-than-expected data on arrival. Source might already
-    // have downsampled the range (e.g. 5-min resolution past 7 d). We
-    // don't have a "store at resolution X" path through HostWriter yet
-    // (chunks are written at G0 raw cadence), so we just log the gap so
-    // an operator can see when their destination policy would further
-    // compress already-compressed source data. The destination's own
-    // compactor will keep whatever density landed - it never recreates
-    // resolution that wasn't sent.
-    let expected_cadence = h.interval_secs.max(1);
-    let mut total_pulled: usize = 0;
-    let mut last_ts = from;
-    let mut sparse_warning_logged = false;
-    loop {
-        let to = now;
-        if from >= to {
-            break;
-        }
-        let resp = client
-            .get(format!(
-                "{}/api/v1/replication/slots/{slot_uuid}/range",
-                peer.base_url
-            ))
-            .bearer_auth(&peer.api_token)
-            .query(&[
-                ("host", h.uuid.to_string()),
-                ("from", from.to_string()),
-                ("to", to.to_string()),
-            ])
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            return Err(anyhow!("/range returned {}", resp.status()));
-        }
-        let body: wire::RangeResp = resp.json().await?;
-        if let Some(skipped_to) = body.truncated_to {
-            tracing::warn!(
-                rule_uuid = %rule.uuid,
-                host_uuid = %h.uuid,
-                from_was = from,
-                truncated_to = skipped_to,
-                "source dropped retention before we could pull; advancing cursor"
-            );
-            from = skipped_to;
-        }
-        if body.samples.is_empty() {
-            break;
-        }
-        // Detect sparse incoming data once per host per backfill pass.
-        // If the average gap between samples is more than 2× the host's
-        // declared interval, source has almost certainly downsampled
-        // them and the destination is now treating them as raw - logged
-        // so an operator can spot when their tier policy needs widening
-        // to match source's archive resolution.
-        if !sparse_warning_logged && body.samples.len() >= 2 {
-            let span = body.samples.last().unwrap().ts - body.samples.first().unwrap().ts;
-            let avg_gap = span.checked_div(body.samples.len() as i64 - 1).unwrap_or(0);
-            if avg_gap > expected_cadence.saturating_mul(2) {
-                sparse_warning_logged = true;
-                tracing::info!(
-                    rule_uuid = %rule.uuid,
-                    host_uuid = %h.uuid,
-                    expected_cadence_secs = expected_cadence,
-                    observed_avg_gap_secs = avg_gap,
-                    "incoming samples sparser than probe cadence; source has likely \
-                     downsampled this range. Destination will store at the cadence \
-                     received and apply its own retention tiers to whatever lands."
-                );
-            }
-        }
-        // Write samples through HostWriter. Out-of-order timestamps are
-        // supported by the WAL; the chunk encoder sorts on seal. The
-        // HZC writer's API takes u32; sample-per-period intervals always
-        // fit, but cap with a min to defend against bad manifest data.
-        let writer = hzc.writer(
-            h.uuid,
-            h.interval_secs.clamp(1, i64::from(u32::MAX)) as u32,
-            h.chunk_window_secs.clamp(60, i64::from(u32::MAX)) as u32,
-        )?;
-        let mut wrote_in_batch = 0usize;
-        for s in &body.samples {
-            // Multi-path dedup: when this host's data is reachable via
-            // more than one peer (cascading topologies), at most one
-            // path writes any given timestamp. Subsequent paths drop
-            // duplicates silently.
-            if !dedup_admit(write_cursors, h.uuid, s.ts) {
-                continue;
-            }
-            let slot = Slot {
-                min: s.min,
-                p2_5: s.p2_5,
-                p25: s.p25,
-                median: s.median,
-                p75: s.p75,
-                p97_5: s.p97_5,
-                loss_pct: s.loss_pct,
-            };
-            writer.write_sample(s.ts, slot)?;
-            wrote_in_batch += 1;
-        }
-        last_ts = body.samples.last().map(|s| s.ts).unwrap_or(last_ts);
-        total_pulled += wrote_in_batch;
-        from = last_ts + 1;
-        if body.exhausted {
-            break;
-        }
-    }
+    let (total_pulled, highest_ts) = pull_range_into_store(
+        rule,
+        peer,
+        slot_uuid,
+        h.uuid,
+        h.interval_secs,
+        h.chunk_window_secs,
+        from,
+        now,
+        hzc,
+        client,
+        write_cursors,
+    )
+    .await?;
+    let last_ts = if highest_ts >= from { highest_ts } else { from };
     if total_pulled > 0 {
         replication::upsert_cursor(pool, rule.id, h.uuid, last_ts, None).await?;
         tracing::info!(
@@ -1159,6 +1068,135 @@ async fn backfill_host(
         replication::upsert_cursor(pool, rule.id, h.uuid, from.max(now), None).await?;
     }
     Ok(())
+}
+
+/// Pull samples from the source's `/range` endpoint into the local HZC
+/// store. Used by `backfill_host` for the initial per-host catch-up and
+/// by `handle_sse_event` for in-band gap-fill when a live sample lands
+/// far ahead of the local cursor.
+///
+/// Loops until the source signals `exhausted` or returns an empty page,
+/// chasing the cursor forward through `truncated_to` markers when the
+/// source's retention drops a window mid-pull. Returns
+/// `(samples_written, highest_ts_seen)`. `highest_ts_seen` is `from-1`
+/// when nothing landed - callers use that to decide whether to advance
+/// a persisted cursor over an empty range.
+async fn pull_range_into_store(
+    rule: &replication::ReplicationRule,
+    peer: &replication::ReplicationPeer,
+    slot_uuid: Uuid,
+    host_uuid: Uuid,
+    interval_secs: i64,
+    chunk_window_secs: i64,
+    initial_from: i64,
+    to: i64,
+    hzc: &Arc<HzcStore>,
+    client: &reqwest::Client,
+    write_cursors: &WriteCursors,
+) -> Result<(usize, i64)> {
+    let expected_cadence = interval_secs.max(1);
+    let mut from = initial_from;
+    let mut total: usize = 0;
+    let mut highest: i64 = from - 1;
+    let mut sparse_warning_logged = false;
+    loop {
+        if from > to {
+            break;
+        }
+        let resp = client
+            .get(format!(
+                "{}/api/v1/replication/slots/{slot_uuid}/range",
+                peer.base_url
+            ))
+            .bearer_auth(&peer.api_token)
+            .query(&[
+                ("host", host_uuid.to_string()),
+                ("from", from.to_string()),
+                ("to", to.to_string()),
+            ])
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(anyhow!("/range returned {}", resp.status()));
+        }
+        let body: wire::RangeResp = resp.json().await?;
+        if let Some(skipped_to) = body.truncated_to {
+            tracing::warn!(
+                rule_uuid = %rule.uuid,
+                %host_uuid,
+                from_was = from,
+                truncated_to = skipped_to,
+                "source dropped retention before we could pull; advancing past the hole"
+            );
+            from = skipped_to;
+            // Reflect the advance in `highest` so the caller's cursor
+            // moves past the unfillable hole; otherwise we'd retry the
+            // same range forever every reconcile pass.
+            if from - 1 > highest {
+                highest = from - 1;
+            }
+        }
+        if body.samples.is_empty() {
+            break;
+        }
+        // Detect sparse incoming data once per pull. If the average gap
+        // between samples is more than 2× the host's declared interval,
+        // source has almost certainly downsampled them and the
+        // destination is now treating them as raw - logged so an
+        // operator can spot when their tier policy needs widening to
+        // match source's archive resolution.
+        if !sparse_warning_logged && body.samples.len() >= 2 {
+            let span = body.samples.last().unwrap().ts - body.samples.first().unwrap().ts;
+            let avg_gap = span.checked_div(body.samples.len() as i64 - 1).unwrap_or(0);
+            if avg_gap > expected_cadence.saturating_mul(2) {
+                sparse_warning_logged = true;
+                tracing::info!(
+                    rule_uuid = %rule.uuid,
+                    %host_uuid,
+                    expected_cadence_secs = expected_cadence,
+                    observed_avg_gap_secs = avg_gap,
+                    "incoming samples sparser than probe cadence; source has likely \
+                     downsampled this range. Destination will store at the cadence \
+                     received and apply its own retention tiers to whatever lands."
+                );
+            }
+        }
+        // Write samples through HostWriter. Out-of-order timestamps are
+        // supported by the WAL; the chunk encoder sorts on seal. The
+        // HZC writer's API takes u32; sample-per-period intervals always
+        // fit, but cap with a min to defend against bad manifest data.
+        let writer = hzc.writer(
+            host_uuid,
+            interval_secs.clamp(1, i64::from(u32::MAX)) as u32,
+            chunk_window_secs.clamp(60, i64::from(u32::MAX)) as u32,
+        )?;
+        for s in &body.samples {
+            // Multi-path dedup: when this host's data is reachable via
+            // more than one peer (cascading topologies), at most one
+            // path writes any given timestamp. Subsequent paths drop
+            // duplicates silently.
+            if !dedup_admit(write_cursors, host_uuid, s.ts) {
+                continue;
+            }
+            let slot = Slot {
+                min: s.min,
+                p2_5: s.p2_5,
+                p25: s.p25,
+                median: s.median,
+                p75: s.p75,
+                p97_5: s.p97_5,
+                loss_pct: s.loss_pct,
+            };
+            writer.write_sample(s.ts, slot)?;
+            total += 1;
+        }
+        highest = body.samples.last().map(|s| s.ts).unwrap_or(highest);
+        from = highest + 1;
+        if body.exhausted {
+            break;
+        }
+    }
+    Ok((total, highest))
 }
 
 /// Pop one fully-buffered SSE event from `buf`. Returns the event and
@@ -1211,12 +1249,13 @@ async fn handle_sse_event(
     _data_dir: &std::path::Path,
     rule: &replication::ReplicationRule,
     peer: &replication::ReplicationPeer,
-    _slot_uuid: Uuid,
+    slot_uuid: Uuid,
     ev: &SseEvent,
     pending_acks: &mut HashMap<Uuid, i64>,
     _events: &broadcast::Sender<haze_api::events_routes::ChangeKind>,
     samples_tx: &broadcast::Sender<haze_store::SampleEvent>,
     write_cursors: &WriteCursors,
+    client: &reqwest::Client,
 ) -> Result<bool> {
     match ev.name.as_str() {
         "ping" => Ok(true),
@@ -1267,6 +1306,74 @@ async fn handle_sse_event(
                     return Ok(false);
                 }
             };
+            // Gap-aware write: if the live sample lands materially past
+            // the persisted cursor, the destination missed a window
+            // (initial-pairing backfill took a while, or a source-side
+            // probe outage). Without this fill, advancing the cursor to
+            // `payload.ts` would leave that window unfilled forever -
+            // subsequent reconciles read `cursor + 1` and never look
+            // back. We do an in-band range pull of `(cursor + 1,
+            // payload.ts - 1)`; if the source can't serve that range
+            // (retention dropped) the helper advances past the hole and
+            // we move on.
+            //
+            // Threshold = max(3 × interval, 60 s) keeps the steady-state
+            // happy-path silent: a one-sample SSE hiccup doesn't trigger
+            // a round-trip. Sized so anything you'd notice in the UI
+            // (anything above one minute) gets healed.
+            if let Some(c) = replication::get_cursor(pool, rule.id, payload.host_uuid).await? {
+                let interval = host.interval_secs.max(1);
+                let gap_threshold = interval.saturating_mul(3).max(60);
+                if payload.ts.saturating_sub(c.last_synced_ts) > gap_threshold {
+                    tracing::info!(
+                        rule_uuid = %rule.uuid,
+                        host_uuid = %payload.host_uuid,
+                        cursor_ts = c.last_synced_ts,
+                        sample_ts = payload.ts,
+                        gap_secs = payload.ts - c.last_synced_ts,
+                        "SSE sample lands past gap; range-filling before live write"
+                    );
+                    match pull_range_into_store(
+                        rule,
+                        peer,
+                        slot_uuid,
+                        payload.host_uuid,
+                        host.interval_secs,
+                        host.chunk_window_secs,
+                        c.last_synced_ts + 1,
+                        payload.ts - 1,
+                        hzc,
+                        client,
+                        write_cursors,
+                    )
+                    .await
+                    {
+                        Ok((wrote, highest)) => {
+                            tracing::info!(
+                                rule_uuid = %rule.uuid,
+                                host_uuid = %payload.host_uuid,
+                                wrote,
+                                highest_ts = highest,
+                                "gap-fill complete"
+                            );
+                        }
+                        Err(e) => {
+                            // Best-effort: log and fall through to the
+                            // live write. The cursor will advance to
+                            // payload.ts below, so the loop never
+                            // retries this exact hole - that's the
+                            // intentional fallback when source can't
+                            // serve the range (network, 5xx, etc.).
+                            tracing::warn!(
+                                rule_uuid = %rule.uuid,
+                                host_uuid = %payload.host_uuid,
+                                error = %e,
+                                "gap-fill failed; proceeding with live write and advancing cursor past hole"
+                            );
+                        }
+                    }
+                }
+            }
             let writer = hzc.writer(
                 payload.host_uuid,
                 host.interval_secs.clamp(1, i64::from(u32::MAX)) as u32,

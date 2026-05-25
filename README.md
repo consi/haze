@@ -29,6 +29,7 @@
 - Percentile bands (median + outer envelopes) with packet-loss-driven opacity.
 - Multi-host overlay views, per-host detail with alerting hooks.
 - Auth via password and `WebAuthn` passkeys (`HAZE_ORIGIN` must be set for passkeys).
+- Cross-instance replication: pull groups (or the whole tree) from peer Haze instances over a long-lived SSE stream, with loop-detection and block/unblock controls.
 - One static binary, frontend assets embedded - no separate webserver.
 - SQLite storage; on first boot, an `admin` user is provisioned with a random password printed to logs.
 

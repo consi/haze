@@ -343,6 +343,16 @@ pub async fn run(cfg: Config) -> Result<()> {
                 let pause_ms = settings::rollup_inter_host_pause_ms(&pool)
                     .await
                     .unwrap_or(settings::DEFAULT_ROLLUP_INTER_HOST_PAUSE_MS);
+                // The G2/G3 tier-finality gate must see the same retention
+                // tiers the compactor applies. If they can't be loaded,
+                // skip the G2/G3 phases this pass (G1 needs no tiers).
+                let tiers = match settings::retention_tiers(&pool).await {
+                    Ok(t) => Some(t),
+                    Err(e) => {
+                        tracing::warn!(error = ?e, "rollup: failed to load retention tiers; skipping G2/G3 this pass");
+                        None
+                    }
+                };
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map_or(0, |d| d.as_secs() as i64);
@@ -404,11 +414,19 @@ pub async fn run(cfg: Config) -> Result<()> {
                             }
                         }
                         // G2 monthly.
+                        let Some(tiers) = &tiers else {
+                            drop(guard);
+                            if !pause.is_zero() {
+                                std::thread::sleep(pause);
+                            }
+                            continue;
+                        };
                         match haze_store::rollup_g2_host(
                             &data_dir_inner,
                             uuid,
                             now,
                             settled_after_g2_i64,
+                            tiers,
                         ) {
                             Ok(rollup) => {
                                 totals.7 += rollup.bundled_days;
@@ -435,6 +453,7 @@ pub async fn run(cfg: Config) -> Result<()> {
                             uuid,
                             now,
                             settled_after_g3_i64,
+                            tiers,
                         ) {
                             Ok(rollup) => {
                                 totals.8 += rollup.bundled_days;

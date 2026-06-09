@@ -105,8 +105,8 @@ fn measure_query_latency_after_lifecycle() {
 
     compact_host(data_dir, uuid, &tiers, now).unwrap();
     rollup_host(data_dir, uuid, now, 3_600).unwrap();
-    rollup_settled_months_in_dir(&host_directory(data_dir, uuid), now, 86_400).unwrap();
-    rollup_settled_years_in_dir(&host_directory(data_dir, uuid), now, 2 * 86_400).unwrap();
+    rollup_settled_months_in_dir(&host_directory(data_dir, uuid), now, 86_400, &tiers).unwrap();
+    rollup_settled_years_in_dir(&host_directory(data_dir, uuid), now, 2 * 86_400, &tiers).unwrap();
 
     let q1_start = Instant::now();
     let samples_post = read_range(data_dir, uuid, T0, now).unwrap();

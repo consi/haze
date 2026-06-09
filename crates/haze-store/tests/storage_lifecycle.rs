@@ -32,6 +32,12 @@ use uuid::Uuid;
 
 const SECS_PER_DAY: i64 = 86_400;
 
+/// The compactor classifies a chunk by the age of its newest edge, so data
+/// may stay at the previous tier's resolution until its whole chunk has
+/// crossed a boundary. The largest chunks are yearly G3 bundles, plus the
+/// 30-day pass cadence of these tests.
+const WHOLE_CHUNK_LAG: i64 = 366 * SECS_PER_DAY + 31 * SECS_PER_DAY;
+
 /// Reference point - Jan 1 2024 00:00:00 UTC. Aligns chunk windows + days +
 /// months + years cleanly.
 const T0: i64 = 1_704_067_200;
@@ -258,8 +264,8 @@ fn run_compaction_pass(data_dir: &Path, hosts: &[(Uuid, u32)], now_secs: i64) {
         let tiers = tiers_for(*interval_secs);
         compact_host(data_dir, *uuid, &tiers, now_secs).unwrap();
         rollup_host(data_dir, *uuid, now_secs, 3_600).unwrap();
-        rollup_g2_host(data_dir, *uuid, now_secs, SECS_PER_DAY).unwrap();
-        rollup_g3_host(data_dir, *uuid, now_secs, 2 * SECS_PER_DAY).unwrap();
+        rollup_g2_host(data_dir, *uuid, now_secs, SECS_PER_DAY, &tiers).unwrap();
+        rollup_g3_host(data_dir, *uuid, now_secs, 2 * SECS_PER_DAY, &tiers).unwrap();
     }
 }
 
@@ -315,29 +321,47 @@ fn lifecycle_g0_to_g3_no_data_loss() {
     run_compaction_pass(data_dir, &hosts, now);
 
     // Validate every host's sample count matches expectation.
+    //
+    // The compactor classifies a chunk by the age of its newest edge, so a
+    // chunk straddling a tier boundary keeps its finer resolution until the
+    // whole chunk has crossed. The largest chunks are yearly G3 bundles, so
+    // data may stay at the previous tier's resolution for up to a year past
+    // the strict boundary (plus the 30-day pass cadence of this test). The
+    // strict policy count is therefore a LOWER bound, and the upper bound
+    // is the count computed as if every boundary were one year + one pass
+    // later (`WHOLE_CHUNK_LAG`).
     for (uuid, interval_secs) in &hosts {
         let tiers = tiers_for(*interval_secs);
         let samples = list_all_samples(data_dir, *uuid, T0, now);
-        let expected = expected_count(*interval_secs, T0, now, &tiers, now);
-        // The compactor only acts on chunks; very young samples in the live
-        // WAL haven't been compacted yet, so they may exceed the strict
-        // tier-policy count. Allow a small headroom.
+        let expected_strict = expected_count(*interval_secs, T0, now, &tiers, now);
+        let expected_lagged =
+            expected_count(*interval_secs, T0, now, &tiers, now - WHOLE_CHUNK_LAG);
+        // Very young samples in the live WAL haven't been compacted yet, so
+        // they may exceed the count. Allow a small headroom.
         let headroom = 2 * (SECS_PER_DAY / i64::from(*interval_secs)) as usize;
         assert!(
-            samples.len() <= expected + headroom,
+            samples.len() <= expected_lagged + headroom,
             "host {uuid} interval={interval_secs}s: returned {} samples, expected ≤ {} (+headroom {})",
             samples.len(),
-            expected,
+            expected_lagged,
             headroom,
         );
-        // Lower bound: the youngest tier must have approximately the
-        // expected count (live WAL data may shift it slightly).
+        // Lower bound: downsampling and deletion only ever LAG the strict
+        // policy, so nothing may drop below it (modulo WAL slop).
         assert!(
-            samples.len() + headroom >= expected.saturating_sub(headroom),
+            samples.len() + headroom >= expected_strict.saturating_sub(headroom),
             "host {uuid}: lost too many samples vs expectation {} (got {})",
-            expected,
+            expected_strict,
             samples.len(),
         );
+        // No duplicate timestamps may survive the reader.
+        for w in samples.windows(2) {
+            assert!(
+                w[0].timestamp_secs < w[1].timestamp_secs,
+                "host {uuid}: duplicate or unordered ts {}",
+                w[0].timestamp_secs
+            );
+        }
     }
 }
 

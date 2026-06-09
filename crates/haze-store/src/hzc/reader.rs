@@ -147,7 +147,15 @@ fn try_read_range(host_dir: &Path, from: i64, to: i64) -> Result<Vec<Sample>, Hz
         }
     }
 
+    // Chunks may briefly overlap at the same resolution and generation (a
+    // rollup merge mid-publish, or a bundle plus later same-day chunks not
+    // yet consolidated). The coverage filter can't drop equal-preference
+    // chunks, so collapse exact-timestamp duplicates here. The sort is
+    // stable and chunks were decoded in `list_chunks` order (resolution
+    // ascending) with WAL records appended last, so the finest sealed
+    // sample wins each collision.
     out.sort_by_key(|s| s.timestamp_secs);
+    out.dedup_by_key(|s| s.timestamp_secs);
     Ok(out)
 }
 
@@ -252,7 +260,9 @@ fn try_read_all(host_dir: &Path) -> Result<Vec<(i64, Slot)>, HzcError> {
         let bytes = fs::read(&cr.path)?;
         out.extend(decode_chunk(&bytes)?);
     }
+    // Same duplicate-collapse rationale as `try_read_range`.
     out.sort_by_key(|(ts, _)| *ts);
+    out.dedup_by_key(|(ts, _)| *ts);
     Ok(out)
 }
 
@@ -372,6 +382,28 @@ mod tests {
         let mut seqs: Vec<u64> = kept.iter().map(|c| c.seq).collect();
         seqs.sort_unstable();
         assert_eq!(seqs, vec![3, 100]);
+    }
+
+    #[test]
+    fn reader_dedupes_identical_timestamps() {
+        // Two overlapping chunks at the same resolution and generation (a
+        // rollup merge mid-flight, or a partial-day bundle next to later
+        // same-day chunks). The coverage filter keeps both; the reader
+        // must still return each timestamp exactly once.
+        use crate::hzc::writer::seal_chunk_inline;
+        let dir = TempDir::new().unwrap();
+        let host_dir = dir.path();
+        std::fs::create_dir_all(host_dir.join(CHUNKS_DIR)).unwrap();
+        let a: Vec<(i64, Slot)> = (0..10).map(|i| (i * 300, slot(20.0))).collect();
+        let b: Vec<(i64, Slot)> = (5..15).map(|i| (i * 300, slot(21.0))).collect();
+        seal_chunk_inline(host_dir, 1, 0, 3_000, 300, 1, 3, &a).unwrap();
+        seal_chunk_inline(host_dir, 2, 1_500, 4_500, 300, 1, 3, &b).unwrap();
+
+        let samples = read_range_in_dir(host_dir, 0, 4_500).unwrap();
+        assert_eq!(samples.len(), 15, "each timestamp exactly once");
+        for w in samples.windows(2) {
+            assert!(w[0].timestamp_secs < w[1].timestamp_secs);
+        }
     }
 
     #[test]

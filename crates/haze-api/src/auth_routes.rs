@@ -140,10 +140,10 @@ pub(crate) async fn me(user: CurrentUser) -> ApiResult<Json<LoginResp>> {
 fn extract_cookie(header_value: &str, name: &str) -> Option<String> {
     for kv in header_value.split(';') {
         let kv = kv.trim();
-        if let Some((k, v)) = kv.split_once('=') {
-            if k == name {
-                return Some(v.to_string());
-            }
+        if let Some((k, v)) = kv.split_once('=')
+            && k == name
+        {
+            return Some(v.to_string());
         }
     }
     None

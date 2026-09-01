@@ -19,6 +19,7 @@
     type GroupPreview,
     type Group
   } from '$lib/api';
+  import { sortGroupsShallowFirst } from '$lib/group-order';
   import { reloadKeys } from '$lib/events.svelte';
   import ReplicationTopology from './ReplicationTopology.svelte';
 
@@ -81,6 +82,8 @@
   let newRuleError = $state<string | null>(null);
   let newRuleSaving = $state(false);
   let localGroupsForPicker = $state<Group[]>([]);
+  const orderedPeerGroups = $derived(sortGroupsShallowFirst(newRulePreviewGroups));
+  const orderedLocalGroups = $derived(sortGroupsShallowFirst(localGroupsForPicker));
 
   // Peer test state (transient banners per-peer).
   let testResults = $state<Record<string, { ok: boolean; message: string }>>({});
@@ -880,7 +883,7 @@
           style="background: var(--bg); border-color: var(--border); color: var(--fg)"
         >
           <option value={null}>(root)</option>
-          {#each newRulePreviewGroups as g (g.uuid)}
+          {#each orderedPeerGroups as g (g.uuid)}
             <option value={g.uuid}>{'  '.repeat(g.depth)}{g.display_name}</option>
           {/each}
         </select>
@@ -893,7 +896,7 @@
           style="background: var(--bg); border-color: var(--border); color: var(--fg)"
         >
           <option value={null}>(root)</option>
-          {#each localGroupsForPicker as g (g.uuid)}
+          {#each orderedLocalGroups as g (g.uuid)}
             <option value={g.uuid}>{'  '.repeat(g.depth)}{g.display_name}</option>
           {/each}
         </select>

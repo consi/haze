@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { canSeeAlerts, canEditAlerts } from '$lib/auth.svelte';
+  import { base } from '$app/paths';
+  import { canSeeAlerts, canEditAlerts, isAdmin } from '$lib/auth.svelte';
   import {
     api,
     type AlertRule,
@@ -11,6 +12,7 @@
     ApiError
   } from '$lib/api';
   import { reloadKeys } from '$lib/events.svelte';
+  import { groupHierarchy } from '$lib/group-order';
   import AlertRuleModal from '$lib/components/AlertRuleModal.svelte';
   import Forbidden from '$lib/components/Forbidden.svelte';
   import { fmtDateTime } from '$lib/timezone.svelte';
@@ -46,12 +48,16 @@
       states = s;
       groups = g;
       hosts = h;
-      // Webhooks are admin-only; for users we list rules but skip webhook
-      // names. Don't surface the 403 as a page-level error.
-      try {
-        webhooks = await api.listWebhooks();
-      } catch (e) {
-        if (!(e instanceof ApiError && e.status === 403)) throw e;
+      // Never request or expose webhook configuration to public/read-only
+      // viewers. The endpoint remains admin-only as a second line of defence.
+      if (isAdmin()) {
+        try {
+          webhooks = await api.listWebhooks();
+        } catch (e) {
+          if (!(e instanceof ApiError && e.status === 403)) throw e;
+          webhooks = [];
+        }
+      } else {
         webhooks = [];
       }
     } catch (e) {
@@ -66,6 +72,8 @@
   // States are the volatile bit; rules/groups/hosts/webhooks are refetched
   // only by explicit user actions (edit/delete/save).
   let pollTimer: ReturnType<typeof setInterval> | undefined;
+  let clockTimer: ReturnType<typeof setInterval> | undefined;
+  let nowSecs = $state(Math.floor(Date.now() / 1000));
 
   async function pollStates() {
     if (!canSeeAlerts()) return;
@@ -78,13 +86,16 @@
   }
 
   onMount(async () => {
-    if (!canSeeAlerts()) return;
-    await refresh();
+    if (canSeeAlerts()) await refresh();
     pollTimer = setInterval(() => void pollStates(), 5_000);
+    clockTimer = setInterval(() => {
+      nowSecs = Math.floor(Date.now() / 1000);
+    }, 1_000);
   });
 
   onDestroy(() => {
     if (pollTimer) clearInterval(pollTimer);
+    if (clockTimer) clearInterval(clockTimer);
   });
 
   // SSE-driven refresh. Rules and webhook names come from full `refresh()`;
@@ -165,6 +176,20 @@
     return v.toFixed(Math.abs(v) >= 100 ? 1 : Math.abs(v) >= 10 ? 2 : 3);
   }
 
+  function formatElapsed(since: number): string {
+    let remaining = Math.max(0, nowSecs - since);
+    const days = Math.floor(remaining / 86_400);
+    remaining %= 86_400;
+    const hours = Math.floor(remaining / 3_600);
+    remaining %= 3_600;
+    const minutes = Math.floor(remaining / 60);
+    const seconds = remaining % 60;
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${seconds}s`;
+    return `${seconds}s`;
+  }
+
   /// Worst severity across every (rule, host) state for this rule.
   function worstSeverityFor(ruleUuid: string): Severity {
     let worst: Severity = 'ok';
@@ -185,6 +210,85 @@
       case 'ok':
         return 'var(--latency-good)';
     }
+  }
+
+  function severityOrder(s: Severity): number {
+    if (s === 'critical') return 0;
+    if (s === 'warning') return 1;
+    return 2;
+  }
+
+  type FiringGroup = {
+    ruleUuid: string;
+    rule: AlertRule | undefined;
+    label: string;
+    states: AlertState[];
+  };
+
+  const firingGroups = $derived.by<FiringGroup[]>(() => {
+    const ruleByUuid = new Map(rules.map((rule) => [rule.uuid, rule]));
+    const hostByUuid = new Map(hosts.map((host) => [host.uuid, host]));
+    const grouped = new Map<string, AlertState[]>();
+    for (const state of states) {
+      if (state.severity === 'ok') continue;
+      const entries = grouped.get(state.rule_uuid) ?? [];
+      entries.push(state);
+      grouped.set(state.rule_uuid, entries);
+    }
+
+    return [...grouped.entries()]
+      .map(([ruleUuid, entries]) => {
+        const rule = ruleByUuid.get(ruleUuid);
+        const label = rule?.name ?? ruleUuid.slice(0, 8);
+        entries.sort((a, b) => {
+          const aHost = hostByUuid.get(a.host_uuid)?.display_name ?? a.host_uuid;
+          const bHost = hostByUuid.get(b.host_uuid)?.display_name ?? b.host_uuid;
+          return (
+            severityOrder(a.severity) - severityOrder(b.severity) ||
+            b.since - a.since ||
+            aHost.localeCompare(bHost, undefined, { sensitivity: 'base' }) ||
+            a.host_uuid.localeCompare(b.host_uuid)
+          );
+        });
+        return { ruleUuid, rule, label, states: entries };
+      })
+      .sort(
+        (a, b) =>
+          a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }) ||
+          a.ruleUuid.localeCompare(b.ruleUuid)
+      );
+  });
+
+  // Rank groups exactly as they appear in the sidebar: sorted roots followed
+  // by each root's recursively sorted descendants. A host may belong to more
+  // than one group; alert links reveal its topmost occurrence in that tree.
+  const groupTreeRank = $derived.by<Map<string, number>>(() => {
+    const hierarchy = groupHierarchy(groups);
+    const children = new Map<string | null, Group[]>();
+    for (const group of groups) {
+      const siblings = children.get(group.parent_uuid) ?? [];
+      siblings.push(group);
+      children.set(group.parent_uuid, siblings);
+    }
+    for (const siblings of children.values()) siblings.sort(hierarchy.compare);
+
+    const rank = new Map<string, number>();
+    const visit = (group: Group) => {
+      if (rank.has(group.uuid)) return;
+      rank.set(group.uuid, rank.size);
+      for (const child of children.get(group.uuid) ?? []) visit(child);
+    };
+    for (const root of children.get(null) ?? []) visit(root);
+    return rank;
+  });
+
+  function hostGraphHref(hostUuid: string): string {
+    const host = hosts.find((candidate) => candidate.uuid === hostUuid);
+    const groupUuid = host?.group_uuids
+      .filter((uuid) => groupTreeRank.has(uuid))
+      .sort((a, b) => groupTreeRank.get(a)! - groupTreeRank.get(b)!)[0];
+    const path = `${base}/hosts/${hostUuid}`;
+    return groupUuid ? `${path}?group=${encodeURIComponent(groupUuid)}` : path;
   }
 
   function webhookSummary(rule: AlertRule): string {
@@ -289,8 +393,12 @@
               <th class="py-1 px-2 font-normal">Metric</th>
               <th class="py-1 px-2 font-normal">Window</th>
               <th class="py-1 px-2 font-normal">Thresholds</th>
-              <th class="py-1 px-2 font-normal">Webhooks</th>
-              <th class="py-1 px-2 font-normal text-right">Actions</th>
+              {#if isAdmin()}
+                <th class="py-1 px-2 font-normal">Webhooks</th>
+              {/if}
+              {#if canEditAlerts()}
+                <th class="py-1 px-2 font-normal text-right">Actions</th>
+              {/if}
             </tr>
           </thead>
           <tbody>
@@ -334,11 +442,13 @@
                 <td class="py-1 px-2">{rule.aggregation}({metricLabel(rule.metric)})</td>
                 <td class="py-1 px-2">{formatWindow(rule.window_secs)}</td>
                 <td class="py-1 px-2">{thresholdSummary(rule)}</td>
-                <td class="py-1 px-2 truncate" style="max-width: 220px" title={webhookSummary(rule)}>
-                  {webhookSummary(rule)}
-                </td>
-                <td class="py-1 px-2 text-right whitespace-nowrap">
-                  {#if canEditAlerts()}
+                {#if isAdmin()}
+                  <td class="py-1 px-2 truncate" style="max-width: 220px" title={webhookSummary(rule)}>
+                    {webhookSummary(rule)}
+                  </td>
+                {/if}
+                {#if canEditAlerts()}
+                  <td class="py-1 px-2 text-right whitespace-nowrap">
                     <button
                       type="button"
                       onclick={() => toggleEnabled(rule)}
@@ -369,12 +479,12 @@
                     >
                       delete
                     </button>
-                  {/if}
-                </td>
+                  </td>
+                {/if}
               </tr>
               {#if rowErr[rule.uuid]}
                 <tr>
-                  <td colspan="8" class="px-2 pb-1">
+                  <td colspan={6 + (isAdmin() ? 1 : 0) + (canEditAlerts() ? 1 : 0)} class="px-2 pb-1">
                     <p class="text-[11px]" style="color: var(--latency-bad)">
                       {rowErr[rule.uuid]}
                     </p>
@@ -387,61 +497,78 @@
         </div>
       </section>
 
-      {#if states.some((s) => s.severity !== 'ok')}
+      {#if firingGroups.length > 0}
         <section class="border rounded p-3" style="border-color: var(--border)">
           <h2 class="text-xs font-semibold mb-2" style="color: var(--muted)">
             Currently firing
           </h2>
-          <div class="overflow-x-auto -mx-3 px-3">
-          <table class="w-full text-xs mono">
-            <thead style="color: var(--muted)">
-              <tr class="text-left">
-                <th class="py-1 px-2 font-normal">Severity</th>
-                <th class="py-1 px-2 font-normal">Rule</th>
-                <th class="py-1 px-2 font-normal">Host</th>
-                <th class="py-1 px-2 font-normal">Comparison</th>
-                <th class="py-1 px-2 font-normal">Since</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each states.filter((s) => s.severity !== 'ok') as s (`${s.rule_uuid}-${s.host_uuid}`)}
-                {@const rule = rules.find((r) => r.uuid === s.rule_uuid)}
-                {@const host = hosts.find((h) => h.uuid === s.host_uuid)}
-                <tr class="border-t" style="border-color: var(--border)">
-                  <td class="py-1 px-2" style="color: {severityColor(s.severity)}">
-                    {s.severity}
-                  </td>
-                  <td class="py-1 px-2">{rule?.name ?? s.rule_uuid.slice(0, 8)}</td>
-                  <td class="py-1 px-2">{host?.display_name ?? s.host_uuid.slice(0, 8)}</td>
-                  <td class="py-1 px-2">
-                    {#if rule && s.last_value != null && s.last_threshold != null}
-                      <span>
-                        {rule.aggregation}({metricLabel(rule.metric)}) = {formatValue(s.last_value)}
-                        <span style="color: var(--muted)">
-                          {rule.direction === 'above' ? '≥' : '≤'}
-                        </span>
-                        {formatValue(s.last_threshold)}
-                      </span>
-                    {:else if s.last_value != null}
-                      <span>{formatValue(s.last_value)}</span>
-                    {:else}
-                      <span style="color: var(--muted)">-</span>
-                    {/if}
-                  </td>
-                  <td class="py-1 px-2" style="color: var(--muted)">
-                    {fmtDateTime(s.since)}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
+          <div class="space-y-2">
+            {#each firingGroups as firing (firing.ruleUuid)}
+              <details open class="border rounded overflow-hidden" style="border-color: var(--border)">
+                <summary class="cursor-pointer select-none px-2 py-1.5 text-xs font-semibold">
+                  {firing.label}
+                  <span class="ml-2 font-normal" style="color: var(--muted)">
+                    {firing.states.length} firing
+                  </span>
+                </summary>
+                <div class="overflow-x-auto">
+                  <table class="w-full text-xs mono">
+                    <thead style="color: var(--muted)">
+                      <tr class="text-left">
+                        <th class="py-1 px-2 font-normal">Severity</th>
+                        <th class="py-1 px-2 font-normal">Host</th>
+                        <th class="py-1 px-2 font-normal">Comparison</th>
+                        <th class="py-1 px-2 font-normal">Since</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each firing.states as s (`${s.rule_uuid}-${s.host_uuid}`)}
+                        {@const host = hosts.find((h) => h.uuid === s.host_uuid)}
+                        <tr class="border-t" style="border-color: var(--border)">
+                          <td class="py-1 px-2" style="color: {severityColor(s.severity)}">
+                            {s.severity}
+                          </td>
+                          <td class="py-1 px-2">
+                            <a
+                              href={hostGraphHref(s.host_uuid)}
+                              class="font-medium hover:underline"
+                              style="color: var(--fg)"
+                            >
+                              {host?.display_name ?? s.host_uuid.slice(0, 8)}
+                            </a>
+                          </td>
+                          <td class="py-1 px-2">
+                            {#if firing.rule && s.last_value != null && s.last_threshold != null}
+                              <span>
+                                {firing.rule.aggregation}({metricLabel(firing.rule.metric)}) = {formatValue(s.last_value)}
+                                <span style="color: var(--muted)">
+                                  {firing.rule.direction === 'above' ? '≥' : '≤'}
+                                </span>
+                                {formatValue(s.last_threshold)}
+                              </span>
+                            {:else if s.last_value != null}
+                              <span>{formatValue(s.last_value)}</span>
+                            {:else}
+                              <span style="color: var(--muted)">-</span>
+                            {/if}
+                          </td>
+                          <td class="py-1 px-2" style="color: var(--muted)">
+                            {fmtDateTime(s.since)} ({formatElapsed(s.since)})
+                          </td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            {/each}
           </div>
         </section>
       {/if}
     {/if}
   </div>
 
-  {#if modalOpen}
+  {#if modalOpen && canEditAlerts()}
     <!-- {#key} forces a fresh modal mount when the user clicks "edit" on a
          different rule, so the form's $state initialisers re-fire with
          the new defaults. -->

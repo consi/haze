@@ -3,7 +3,13 @@
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { page } from '$app/state';
-  import { treeState, toggle as toggleNode } from '$lib/tree-state.svelte';
+  import { tick, untrack } from 'svelte';
+  import {
+    expand as expandNodes,
+    treeState,
+    toggle as toggleNode
+  } from '$lib/tree-state.svelte';
+  import { groupHierarchy } from '$lib/group-order';
 
   let {
     groups,
@@ -22,19 +28,13 @@
     onEditHost?: (h: Host) => void;
   } = $props();
 
-  // Tree rows are narrow - anything past ~25 chars wraps or shoves the
-  // probe-kind badge off the row. Truncate with an ellipsis and keep the
-  // full name available on hover via the `title` attribute.
-  const NAME_LIMIT = 25;
-  function truncateName(s: string): string {
-    return s.length > NAME_LIMIT ? s.slice(0, NAME_LIMIT) + '…' : s;
-  }
-
   type Node = {
     group: Group;
     children: Node[];
     hosts: Host[];
   };
+
+  const hierarchy = $derived(groupHierarchy(groups));
 
   const tree = $derived.by(() => {
     const byUuid = new Map<string, Node>();
@@ -50,12 +50,62 @@
         byUuid.get(gu)?.hosts.push(h);
       }
     }
+    const sortNodes = (nodes: Node[]) => {
+      nodes.sort((a, b) => hierarchy.compare(a.group, b.group));
+      for (const node of nodes) sortNodes(node.children);
+    };
+    sortNodes(roots);
     return roots;
   });
 
   const rootHosts = $derived(hosts.filter((h) => h.group_uuids.length === 0));
 
   const expanded = $derived(treeState.expanded);
+
+  // Alert host links include the first group in which the host appears as a
+  // `group` query parameter. Expand that group and every ancestor so the
+  // selected host is visible in the sidebar, even when another search filter
+  // is currently active. Keep the expansion in the normal persisted state.
+  const revealGroupUuid = $derived(page.url.searchParams.get('group'));
+  const revealHostUuid = $derived(
+    page.url.pathname.startsWith(`${base}/hosts/`) ? page.params.uuid ?? null : null
+  );
+  const revealPathUuids = $derived.by<Set<string>>(() => {
+    const result = new Set<string>();
+    if (!revealGroupUuid || !revealHostUuid) return result;
+    const host = hosts.find((candidate) => candidate.uuid === revealHostUuid);
+    if (!host?.group_uuids.includes(revealGroupUuid)) return result;
+    const byUuid = new Map(groups.map((group) => [group.uuid, group]));
+    let current = byUuid.get(revealGroupUuid);
+    while (current && !result.has(current.uuid)) {
+      result.add(current.uuid);
+      current = current.parent_uuid ? byUuid.get(current.parent_uuid) : undefined;
+    }
+    return result;
+  });
+
+  let treeNav: HTMLElement | undefined = $state();
+  let lastReveal = '';
+  $effect(() => {
+    const groupUuid = revealGroupUuid;
+    const hostUuid = revealHostUuid;
+    const path = [...revealPathUuids];
+    if (!groupUuid || !hostUuid || path.length === 0) return;
+    const key = `${groupUuid}:${hostUuid}`;
+    if (key === lastReveal) return;
+    lastReveal = key;
+    untrack(() => expandNodes(path));
+    void tick().then(() => {
+      const row = Array.from(
+        treeNav?.querySelectorAll<HTMLElement>('[data-tree-host-uuid]') ?? []
+      ).find(
+        (candidate) =>
+          candidate.dataset.treeHostUuid === hostUuid &&
+          candidate.dataset.treeGroupUuid === groupUuid
+      );
+      row?.scrollIntoView({ block: 'nearest' });
+    });
+  });
 
   function toggle(uuid: string) {
     toggleNode(uuid);
@@ -93,40 +143,87 @@
     return terms.every((t) => haystack.includes(t));
   }
 
-  const matchedGroupUuids = $derived.by<Set<string>>(() => {
+  function groupMatches(g: Group): boolean {
+    if (!isSearching) return true;
+    const haystack = hierarchy.breadcrumb(g).toLowerCase();
+    return terms.every((t) => haystack.includes(t));
+  }
+
+  const directlyMatchedGroupUuids = $derived.by<Set<string>>(() => {
+    const result = new Set<string>();
+    if (!isSearching) return result;
+    for (const g of groups) {
+      if (groupMatches(g)) result.add(g.uuid);
+    }
+    return result;
+  });
+
+  // Every descendant of a directly matched group remains browsable. A group
+  // may be replicated or local; ownership does not change search ordering or
+  // visibility semantics.
+  const matchedSubtreeGroupUuids = $derived.by<Set<string>>(() => {
     const result = new Set<string>();
     if (!isSearching) return result;
     const parent = new Map<string, string | null>();
     for (const g of groups) parent.set(g.uuid, g.parent_uuid);
-    for (const h of hosts) {
-      if (!hostMatches(h)) continue;
-      for (const gu of h.group_uuids) {
-        let g: string | null = gu;
-        while (g != null && !result.has(g)) {
-          result.add(g);
-          g = parent.get(g) ?? null;
+    for (const g of groups) {
+      let current: string | null = g.uuid;
+      while (current != null) {
+        if (directlyMatchedGroupUuids.has(current)) {
+          result.add(g.uuid);
+          break;
         }
+        current = parent.get(current) ?? null;
       }
     }
     return result;
   });
 
+  const visibleGroupUuids = $derived.by<Set<string>>(() => {
+    const result = new Set<string>();
+    if (!isSearching) return result;
+    const parent = new Map<string, string | null>();
+    for (const g of groups) parent.set(g.uuid, g.parent_uuid);
+
+    const includeWithAncestors = (uuid: string) => {
+      let current: string | null = uuid;
+      while (current != null && !result.has(current)) {
+        result.add(current);
+        current = parent.get(current) ?? null;
+      }
+    };
+    for (const uuid of matchedSubtreeGroupUuids) includeWithAncestors(uuid);
+    for (const h of hosts) {
+      if (!hostMatches(h)) continue;
+      for (const gu of h.group_uuids) includeWithAncestors(gu);
+    }
+    return result;
+  });
+
   function showGroup(node: Node): boolean {
-    return !isSearching || matchedGroupUuids.has(node.group.uuid);
+    return (
+      !isSearching ||
+      visibleGroupUuids.has(node.group.uuid) ||
+      revealPathUuids.has(node.group.uuid)
+    );
   }
   function showHost(h: Host): boolean {
-    return hostMatches(h);
+    return (
+      h.uuid === revealHostUuid ||
+      hostMatches(h) || h.group_uuids.some((uuid) => matchedSubtreeGroupUuids.has(uuid))
+    );
   }
   function nodeOpen(g: Group): boolean {
-    if (isSearching) return matchedGroupUuids.has(g.uuid);
+    if (revealPathUuids.has(g.uuid)) return true;
+    if (isSearching) return visibleGroupUuids.has(g.uuid);
     return expanded.has(g.uuid);
   }
 </script>
 
-<nav class="text-xs leading-tight select-none">
+<nav bind:this={treeNav} class="text-xs leading-tight select-none">
   {#each rootHosts as host (host.uuid)}
     {#if showHost(host)}
-      {@render hostRow(host, 0.5)}
+      {@render hostRow(host, 0.5, null)}
     {/if}
   {/each}
   {#each tree as node (node.group.uuid)}
@@ -169,8 +266,10 @@
   </button>
 {/snippet}
 
-{#snippet hostRow(host: Host, paddingRem: number)}
+{#snippet hostRow(host: Host, paddingRem: number, groupUuid: string | null)}
   <div
+    data-tree-host-uuid={host.uuid}
+    data-tree-group-uuid={groupUuid ?? ''}
     class="group w-full flex items-center gap-2 px-2 py-1.5 md:py-0.5 hover:bg-white/5"
     style="padding-left: {paddingRem}rem; {isActiveHost(host.uuid)
       ? 'background: rgba(78, 161, 255, 0.12);'
@@ -183,11 +282,11 @@
     <button
       type="button"
       onclick={() => pickHost(host.uuid)}
-      class="flex-1 text-left"
+      class="flex-1 min-w-0 text-left truncate"
       style={host.replication_peer_id != null ? 'color: var(--fg-replicated)' : ''}
       title={host.display_name}
     >
-      {truncateName(host.display_name)}
+      {host.display_name}
     </button>
     {#if onEditHost}
       {@render editPencil(() => onEditHost?.(host), `Edit ${host.display_name}`)}
@@ -222,11 +321,11 @@
       <button
         type="button"
         onclick={() => pickGroup(node.group.uuid)}
-        class="flex-1 text-left font-medium"
+        class="flex-1 min-w-0 text-left font-medium truncate"
         style="color: var(--fg)"
         title={node.group.display_name}
       >
-        {truncateName(node.group.display_name)}
+        {node.group.display_name}
       </button>
       {#if onEditGroup}
         {@render editPencil(() => onEditGroup?.(node.group), `Edit ${node.group.display_name}`)}
@@ -236,7 +335,7 @@
     {#if isOpen}
       {#each node.hosts as host (host.uuid)}
         {#if showHost(host)}
-          {@render hostRow(host, 1.5 + depth * 0.75)}
+          {@render hostRow(host, 1.5 + depth * 0.75, node.group.uuid)}
         {/if}
       {/each}
       {#each node.children as child (child.group.uuid)}

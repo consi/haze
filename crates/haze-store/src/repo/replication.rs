@@ -45,10 +45,10 @@ pub enum ReplicationError {
 }
 
 fn map_unique(e: sqlx::Error, on_unique: ReplicationError) -> ReplicationError {
-    if let sqlx::Error::Database(db) = &e {
-        if db.is_unique_violation() {
-            return on_unique;
-        }
+    if let sqlx::Error::Database(db) = &e
+        && db.is_unique_violation()
+    {
+        return on_unique;
     }
     ReplicationError::Db(e)
 }

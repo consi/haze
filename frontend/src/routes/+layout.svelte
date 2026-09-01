@@ -291,6 +291,7 @@
           {/if}
           <button onclick={doLogout} class="hover:text-[var(--fg)]">log out</button>
         {:else if publicMode.enabled}
+          <a href={`${base}/alerting`} class="hover:text-[var(--fg)]">alerting</a>
           <a href={`${base}/login`} class="hover:text-[var(--fg)]">log in</a>
         {/if}
       </span>
@@ -429,6 +430,7 @@
               {/if}
               <button onclick={doLogout} class="ml-auto">log out</button>
             {:else if publicMode.enabled}
+              <a href={`${base}/alerting`}>alerting</a>
               <a href={`${base}/login`} class="ml-auto">log in</a>
             {/if}
           </div>

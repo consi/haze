@@ -4,8 +4,9 @@
   import { api, type Host, type SeriesResp, type StorageSettings } from '$lib/api';
   import { isAbortError, loadSeries, samplesForWidth } from '$lib/series';
   import SmokeChart from '$lib/components/SmokeChart.svelte';
-  import SmallMultiples from '$lib/components/SmallMultiples.svelte';
+  import GraphLoadingSpinner from '$lib/components/GraphLoadingSpinner.svelte';
   import { fmt, partsInZone } from '$lib/timezone.svelte';
+  import { loadGraphRange, saveGraphRange } from '$lib/time-range';
 
   let hostUuid = $derived(page.params.uuid);
   let host = $state<Host | null>(null);
@@ -33,10 +34,13 @@
     { label: '5y', spanSecs: 5 * 365 * 86_400 },
     { label: 'max', spanSecs: 10 * 365 * 86_400 }
   ];
+  const PRESET_LABELS = new Set(PRESETS.map((p) => p.label));
 
   let preset = $state<Preset>(PRESETS[0]);
   let toSecs = $state<number>(Math.floor(Date.now() / 1000));
+  let fixedFromSecs = $state<number | null>(null);
   let fromSecs = $derived.by(() => {
+    if (fixedFromSecs != null) return fixedFromSecs;
     if (preset.label === 'max') {
       // "max" = the storage retention horizon (the largest `max_age_secs`
       // across the configured retention tiers). Older data has been deleted
@@ -63,6 +67,7 @@
   }
   let series = $state<SeriesResp | null>(null);
   let loading = $state(false);
+  let seriesRequestId = 0;
 
   async function loadHost() {
     if (!hostUuid) return;
@@ -86,24 +91,75 @@
 
   async function refreshSeries() {
     if (!hostUuid) return;
+    const requestId = ++seriesRequestId;
     loading = true;
     err = null;
     try {
-      series = await loadSeries({ hostUuid, fromSecs, toSecs, targetSamples });
+      const next = await loadSeries({ hostUuid, fromSecs, toSecs, targetSamples });
+      if (requestId === seriesRequestId) series = next;
     } catch (e) {
       // A newer refresh (live tick, zoom, preset) aborted this one - the
       // newer call will land and update state, so we silently drop the
       // abort instead of flashing an error.
       if (isAbortError(e)) return;
-      err = e instanceof Error ? e.message : String(e);
+      if (requestId === seriesRequestId) err = e instanceof Error ? e.message : String(e);
     } finally {
-      loading = false;
+      if (requestId === seriesRequestId) loading = false;
     }
   }
 
   function refreshNow() {
-    toSecs = Math.floor(Date.now() / 1000);
+    // A manual refresh of a paused/zoomed chart means "reload this exact
+    // historical window", not "jump back to now".
+    if (live) toSecs = Math.floor(Date.now() / 1000);
     void refreshSeries();
+  }
+
+  function persistRange(uuid = hostUuid) {
+    if (!uuid) return;
+    if (live) {
+      saveGraphRange('host', uuid, { version: 1, mode: 'live', preset: preset.label });
+      return;
+    }
+    saveGraphRange('host', uuid, {
+      version: 1,
+      mode: 'fixed',
+      fromSecs,
+      toSecs,
+      preset: PRESET_LABELS.has(preset.label) ? preset.label : null
+    });
+  }
+
+  function restoreRange(uuid: string) {
+    const restored = loadGraphRange('host', uuid, PRESET_LABELS);
+    if (!restored) {
+      preset = PRESETS[0];
+      fixedFromSecs = null;
+      toSecs = Math.floor(Date.now() / 1000);
+      live = true;
+      persistRange(uuid);
+      return;
+    }
+    if (restored.mode === 'live') {
+      preset = PRESETS.find((p) => p.label === restored.preset) ?? PRESETS[0];
+      fixedFromSecs = null;
+      toSecs = Math.floor(Date.now() / 1000);
+      live = true;
+    } else {
+      const restoredPreset = restored.preset
+        ? PRESETS.find((p) => p.label === restored.preset)
+        : undefined;
+      preset = restoredPreset ?? {
+        label: 'custom',
+        spanSecs: restored.toSecs - restored.fromSecs
+      };
+      fixedFromSecs = restored.fromSecs;
+      toSecs = restored.toSecs;
+      live = false;
+    }
+    // Client-side navigation inherits the prior page's range; save that
+    // inherited value under the destination UUID for later full reloads.
+    persistRange(uuid);
   }
 
   function selectPreset(p: Preset) {
@@ -112,7 +168,9 @@
     // wall-clock and re-enable live mode so the visible window stays
     // synchronised.
     live = true;
+    fixedFromSecs = null;
     refreshNow();
+    persistRange();
   }
 
   function onZoom(zoomFrom: number, zoomTo: number) {
@@ -120,17 +178,25 @@
     // the (virtual) preset; we synthesise a custom span. Disable live since
     // the user is now inspecting a fixed historical window.
     live = false;
+    fixedFromSecs = zoomFrom;
     toSecs = zoomTo;
     preset = { label: 'custom', spanSecs: zoomTo - zoomFrom };
+    persistRange();
     void refreshSeries();
   }
 
   function toggleLive() {
-    live = !live;
     if (live) {
+      fixedFromSecs = fromSecs;
+      live = false;
+      persistRange();
+    } else {
+      live = true;
+      fixedFromSecs = null;
       // Re-anchor to wall clock and grab fresh data immediately so the
       // chart doesn't have a stale right edge until the next 5 s tick.
       refreshNow();
+      persistRange();
     }
   }
 
@@ -170,6 +236,7 @@
     const u = hostUuid;
     if (!u) return;
     untrack(() => {
+      restoreRange(u);
       host = null;
       series = null;
       err = null;
@@ -338,7 +405,7 @@
 
     <div
       bind:this={chartWrapper}
-      class="border rounded p-1 md:p-2 mt-2"
+      class="relative border rounded p-1 md:p-2 mt-2 min-h-[276px]"
       style="border-color: var(--border)"
     >
       {#if series}
@@ -354,12 +421,13 @@
           height={260}
           title={host?.display_name ?? 'host'}
         />
-      {:else if loading}
-        <p class="text-xs p-4" style="color: var(--muted)">Loading…</p>
-      {:else}
+      {:else if !loading}
         <p class="text-xs p-4" style="color: var(--muted)">
           Waiting for the first probe to complete - data will appear after one probe interval.
         </p>
+      {/if}
+      {#if loading}
+        <GraphLoadingSpinner />
       {/if}
     </div>
 
@@ -367,11 +435,4 @@
     <p class="text-xs" style="color: var(--muted)">Loading…</p>
   {/if}
 
-  <!-- Rendered outside the {#if host} gate so its 4 panel fetches start in
-       parallel with the host metadata + main-chart series fetch, instead of
-       waiting one extra round-trip behind the host load. hostName is
-       optional in SmokeChart so undefined until host arrives is fine. -->
-  {#if !err && hostUuid}
-    <SmallMultiples {hostUuid} hostName={host?.display_name} {onZoom} />
-  {/if}
 </div>

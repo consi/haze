@@ -334,6 +334,9 @@ const PUBLIC_MODE_ANONYMOUS: &[(&str, &str)] = &[
     ("/api/v1/hosts/{uuid}", "get"),
     ("/api/v1/hosts/{uuid}/series", "get"),
     ("/api/v1/settings/storage", "get"),
+    ("/api/v1/alerts/rules", "get"),
+    ("/api/v1/alerts/rules/{uuid}", "get"),
+    ("/api/v1/alerts/states", "get"),
 ];
 
 /// Serve the generated `OpenAPI` document.

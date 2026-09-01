@@ -4,6 +4,7 @@
   import { api, type Group, type Host, type StorageSettings } from '$lib/api';
   import HostChartCard from '$lib/components/HostChartCard.svelte';
   import { fmt, partsInZone } from '$lib/timezone.svelte';
+  import { loadGraphRange, saveGraphRange } from '$lib/time-range';
 
   let groupUuid = $derived(page.params.uuid);
   let group = $state<Group | null>(null);
@@ -24,10 +25,13 @@
     { label: '5y', spanSecs: 5 * 365 * 86_400 },
     { label: 'max', spanSecs: 10 * 365 * 86_400 }
   ];
+  const PRESET_LABELS = new Set(PRESETS.map((p) => p.label));
 
   let preset = $state<Preset>(PRESETS[0]);
   let toSecs = $state<number>(Math.floor(Date.now() / 1000));
+  let fixedFromSecs = $state<number | null>(null);
   let fromSecs = $derived.by(() => {
+    if (fixedFromSecs != null) return fixedFromSecs;
     if (preset.label === 'max') {
       // Earliest created_at among the loaded hosts caps the window: there
       // can't be data older than that for any chart in view. Falls back to
@@ -100,6 +104,7 @@
     const u = groupUuid;
     if (!u) return;
     untrack(() => {
+      restoreRange(u);
       group = null;
       hosts = [];
       loadErr = null;
@@ -110,27 +115,84 @@
   function selectPreset(p: Preset) {
     preset = p;
     live = true;
+    fixedFromSecs = null;
     toSecs = Math.floor(Date.now() / 1000);
     refreshTick += 1;
+    persistRange();
   }
 
   function refreshNow() {
-    toSecs = Math.floor(Date.now() / 1000);
+    if (live) toSecs = Math.floor(Date.now() / 1000);
     refreshTick += 1;
   }
 
+  function persistRange(uuid = groupUuid) {
+    if (!uuid) return;
+    if (live) {
+      saveGraphRange('group', uuid, { version: 1, mode: 'live', preset: preset.label });
+      return;
+    }
+    saveGraphRange('group', uuid, {
+      version: 1,
+      mode: 'fixed',
+      fromSecs,
+      toSecs,
+      preset: PRESET_LABELS.has(preset.label) ? preset.label : null
+    });
+  }
+
+  function restoreRange(uuid: string) {
+    const restored = loadGraphRange('group', uuid, PRESET_LABELS);
+    if (!restored) {
+      preset = PRESETS[0];
+      fixedFromSecs = null;
+      toSecs = Math.floor(Date.now() / 1000);
+      live = true;
+      persistRange(uuid);
+      return;
+    }
+    if (restored.mode === 'live') {
+      preset = PRESETS.find((p) => p.label === restored.preset) ?? PRESETS[0];
+      fixedFromSecs = null;
+      toSecs = Math.floor(Date.now() / 1000);
+      live = true;
+    } else {
+      const restoredPreset = restored.preset
+        ? PRESETS.find((p) => p.label === restored.preset)
+        : undefined;
+      preset = restoredPreset ?? {
+        label: 'custom',
+        spanSecs: restored.toSecs - restored.fromSecs
+      };
+      fixedFromSecs = restored.fromSecs;
+      toSecs = restored.toSecs;
+      live = false;
+    }
+    persistRange(uuid);
+  }
+
   function toggleLive() {
-    live = !live;
-    if (live) refreshNow();
+    if (live) {
+      fixedFromSecs = fromSecs;
+      live = false;
+      persistRange();
+    } else {
+      live = true;
+      fixedFromSecs = null;
+      refreshNow();
+      persistRange();
+    }
   }
 
   function onZoom(zoomFrom: number, zoomTo: number) {
     // Same gesture semantics as the host page: drag-zoom on ANY chart
     // updates the shared window for ALL visible charts.
     live = false;
+    fixedFromSecs = zoomFrom;
     toSecs = zoomTo;
     preset = { label: 'custom', spanSecs: zoomTo - zoomFrom };
     refreshTick += 1;
+    persistRange();
   }
 
   function formatRange(from: number, to: number): string {

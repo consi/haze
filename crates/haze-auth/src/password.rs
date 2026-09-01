@@ -2,7 +2,7 @@
 //! Hashes are stored as PHC strings so future migrations are graceful.
 
 use argon2::{Algorithm, Argon2, Params, Version};
-use password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng};
+use password_hash::{PasswordHasher, PasswordVerifier, phc::PasswordHash};
 
 #[derive(Debug, thiserror::Error)]
 pub enum PasswordError {
@@ -21,10 +21,9 @@ fn argon2() -> Argon2<'static> {
 }
 
 pub fn hash(password: &str) -> Result<String, PasswordError> {
-    let salt = SaltString::generate(&mut OsRng);
     let hasher = argon2();
     let hash = hasher
-        .hash_password(password.as_bytes(), &salt)
+        .hash_password(password.as_bytes())
         .map_err(|e| PasswordError::Hash(e.to_string()))?;
     Ok(hash.to_string())
 }
@@ -35,7 +34,7 @@ pub fn verify(password: &str, stored_hash: &str) -> Result<bool, PasswordError> 
     let hasher = argon2();
     match hasher.verify_password(password.as_bytes(), &parsed) {
         Ok(()) => Ok(true),
-        Err(password_hash::Error::Password) => Ok(false),
+        Err(password_hash::Error::PasswordInvalid) => Ok(false),
         Err(e) => Err(PasswordError::Verify(e.to_string())),
     }
 }

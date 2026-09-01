@@ -63,6 +63,21 @@ export function toggle(uuid: string) {
   persist(treeState.expanded);
 }
 
+/** Add groups to the expanded set without collapsing the user's other open
+ *  branches. Used by deep links that need to reveal one specific tree path. */
+export function expand(uuids: Iterable<string>) {
+  const next = new Set(treeState.expanded);
+  let changed = false;
+  for (const uuid of uuids) {
+    if (next.has(uuid)) continue;
+    next.add(uuid);
+    changed = true;
+  }
+  if (!changed) return;
+  treeState.expanded = next;
+  persist(treeState.expanded);
+}
+
 /** Bump the reload key to make the layout refetch the tree. Call after any
  *  successful mutation that affects the host/group list. */
 export function reloadTree() {

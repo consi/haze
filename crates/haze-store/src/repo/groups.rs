@@ -27,10 +27,10 @@ pub enum GroupError {
 /// Tag the unique-index violation we expect from
 /// `ux_groups_sibling_name`. Anything else is a real DB error.
 fn map_name_unique(e: sqlx::Error) -> GroupError {
-    if let sqlx::Error::Database(db) = &e {
-        if db.is_unique_violation() {
-            return GroupError::NameTaken;
-        }
+    if let sqlx::Error::Database(db) = &e
+        && db.is_unique_violation()
+    {
+        return GroupError::NameTaken;
     }
     GroupError::Db(e)
 }

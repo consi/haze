@@ -271,24 +271,24 @@ pub(crate) async fn update(
     if let Some(pt) = req.probe_type.as_deref() {
         parse_kind(pt)?;
     }
-    if let Some(cfg) = &req.probe_config {
-        if !cfg.is_object() {
-            return Err(ApiError::Validation(
-                "probe_config must be a JSON object".into(),
-            ));
-        }
+    if let Some(cfg) = &req.probe_config
+        && !cfg.is_object()
+    {
+        return Err(ApiError::Validation(
+            "probe_config must be a JSON object".into(),
+        ));
     }
-    if let Some(iv) = req.interval_secs {
-        if iv == 0 {
-            return Err(ApiError::Validation("interval_secs must be > 0".into()));
-        }
+    if let Some(iv) = req.interval_secs
+        && iv == 0
+    {
+        return Err(ApiError::Validation("interval_secs must be > 0".into()));
     }
-    if let Some(sp) = req.samples_per_period {
-        if sp == 0 || sp > 1000 {
-            return Err(ApiError::Validation(
-                "samples_per_period must be between 1 and 1000".into(),
-            ));
-        }
+    if let Some(sp) = req.samples_per_period
+        && (sp == 0 || sp > 1000)
+    {
+        return Err(ApiError::Validation(
+            "samples_per_period must be between 1 and 1000".into(),
+        ));
     }
 
     let probe_cfg_json = req

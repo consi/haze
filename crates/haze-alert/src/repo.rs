@@ -281,13 +281,13 @@ async fn hydrate_rule(pool: &SqlitePool, r: RuleRow) -> Result<AlertRule, RepoEr
         // Skip targets that have been deleted out from under the rule;
         // they'll get pruned the next time the rule is updated through
         // the API.
-        if let Some((bytes,)) = uuid_bytes {
-            if let Ok(t_uuid) = Uuid::from_slice(&bytes) {
-                targets.push(RuleTarget {
-                    kind: kind_typed,
-                    uuid: t_uuid,
-                });
-            }
+        if let Some((bytes,)) = uuid_bytes
+            && let Ok(t_uuid) = Uuid::from_slice(&bytes)
+        {
+            targets.push(RuleTarget {
+                kind: kind_typed,
+                uuid: t_uuid,
+            });
         }
     }
 
@@ -482,10 +482,10 @@ async fn expand_targets_to_hosts(
             .bind(id)
             .fetch_optional(pool)
             .await?;
-        if let Some((bytes,)) = row {
-            if let Ok(u) = Uuid::from_slice(&bytes) {
-                out.push((id, u));
-            }
+        if let Some((bytes,)) = row
+            && let Ok(u) = Uuid::from_slice(&bytes)
+        {
+            out.push((id, u));
         }
     }
     Ok(out)

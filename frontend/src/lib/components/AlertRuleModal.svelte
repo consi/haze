@@ -12,6 +12,7 @@
     type Host,
     type Webhook
   } from '$lib/api';
+  import { groupHierarchy } from '$lib/group-order';
   import Modal from './Modal.svelte';
 
   // Single component used for both create and edit: pass `initial` to
@@ -124,15 +125,10 @@
     );
   });
 
+  const targetHierarchy = $derived(groupHierarchy(groups));
+
   function breadcrumb(g: Group): string {
-    const byUuid = new Map<string, Group>(groups.map((x) => [x.uuid, x]));
-    const parts: string[] = [];
-    let cur: Group | undefined = g;
-    while (cur) {
-      parts.unshift(cur.display_name);
-      cur = cur.parent_uuid != null ? byUuid.get(cur.parent_uuid) : undefined;
-    }
-    return parts.join(' > ');
+    return targetHierarchy.breadcrumb(g);
   }
 
   type TargetSuggestion =
@@ -179,7 +175,12 @@
   // the keyboard-only flow (focus, type, Enter) pick a group by default.
   const targetSuggestions = $derived.by<TargetSuggestion[]>(() => {
     const q = targetSearch.trim().toLowerCase();
-    type Scored = { item: TargetSuggestion; score: number; order: number };
+    type Scored = {
+      item: TargetSuggestion;
+      score: number;
+      order: number;
+      group?: Group;
+    };
     const groupHits: Scored[] = [];
     let order = 0;
     for (const g of groups) {
@@ -187,7 +188,12 @@
       const label = breadcrumb(g);
       const score = fuzzyScore(label.toLowerCase(), q);
       if (score == null) continue;
-      groupHits.push({ item: { kind: 'group', uuid: g.uuid, label }, score, order: order++ });
+      groupHits.push({
+        item: { kind: 'group', uuid: g.uuid, label },
+        score,
+        order: order++,
+        group: g
+      });
     }
     const hostHits: Scored[] = [];
     for (const h of hosts) {
@@ -200,14 +206,25 @@
         order: order++
       });
     }
-    // When there's a query, sort by fuzzy score across BOTH kinds so the
-    // best match wins regardless of host/group. With no query, preserve
-    // original ordering (groups first, then hosts).
-    if (q) {
-      const all = [...groupHits, ...hostHits];
-      all.sort((a, b) => a.score - b.score || a.order - b.order);
-      return all.slice(0, MAX_SUGGESTIONS).map((s) => s.item);
-    }
+    // Groups are ordered from broadest to most specific before the result
+    // cap is applied, so descendants cannot crowd a top-level target out of
+    // the picker. Hosts are leaf targets and therefore follow every group.
+    groupHits.sort((a, b) => {
+      const ag = a.group!;
+      const bg = b.group!;
+      return (
+        ag.depth - bg.depth ||
+        a.score - b.score ||
+        targetHierarchy.compare(ag, bg) ||
+        a.order - b.order
+      );
+    });
+    hostHits.sort(
+      (a, b) =>
+        a.score - b.score ||
+        a.item.label.localeCompare(b.item.label, undefined, { sensitivity: 'base' }) ||
+        a.order - b.order
+    );
     return [...groupHits, ...hostHits].slice(0, MAX_SUGGESTIONS).map((s) => s.item);
   });
 

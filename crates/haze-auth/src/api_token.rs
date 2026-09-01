@@ -6,7 +6,6 @@
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::Utc;
-use rand::{RngCore, rngs::OsRng};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
@@ -42,7 +41,7 @@ pub async fn create(
     replication_only: bool,
 ) -> Result<(i64, String), TokenError> {
     let mut raw = [0u8; TOKEN_BYTES];
-    OsRng.fill_bytes(&mut raw);
+    rand::fill(&mut raw);
     let plaintext = format!("{TOKEN_PREFIX}{}", URL_SAFE_NO_PAD.encode(raw));
     let hash = sha256(&plaintext);
     let now = Utc::now().timestamp();

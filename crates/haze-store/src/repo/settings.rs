@@ -466,12 +466,11 @@ pub async fn set_public_mode_settings(
 /// in multi-hop topologies and to identify the destination on
 /// `POST /replication/slots`.
 pub async fn instance_uuid(pool: &SqlitePool) -> Result<Uuid, SettingsError> {
-    if let Some(raw) = get_raw(pool, KEY_INSTANCE_UUID).await? {
-        if let Ok(parsed) = serde_json::from_str::<String>(&raw) {
-            if let Ok(u) = Uuid::parse_str(&parsed) {
-                return Ok(u);
-            }
-        }
+    if let Some(raw) = get_raw(pool, KEY_INSTANCE_UUID).await?
+        && let Ok(parsed) = serde_json::from_str::<String>(&raw)
+        && let Ok(u) = Uuid::parse_str(&parsed)
+    {
+        return Ok(u);
     }
     let fresh = Uuid::new_v4();
     let json = serde_json::to_string(&fresh.to_string())?;

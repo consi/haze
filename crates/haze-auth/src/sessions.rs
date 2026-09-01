@@ -6,7 +6,6 @@
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::Utc;
-use rand::{RngCore, rngs::OsRng};
 use sha2::{Digest, Sha256};
 use sqlx::SqlitePool;
 
@@ -47,7 +46,7 @@ pub async fn create(
     remote_addr: Option<&str>,
 ) -> Result<String, SessionError> {
     let mut raw = [0u8; ID_BYTES];
-    OsRng.fill_bytes(&mut raw);
+    rand::fill(&mut raw);
     let id_hash = sha256(&raw);
     let now = Utc::now().timestamp();
     sqlx::query(

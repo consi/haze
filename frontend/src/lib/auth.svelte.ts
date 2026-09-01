@@ -46,7 +46,9 @@ export function canSeeSettings(): boolean {
   return auth.user?.role === 'admin';
 }
 export function canSeeAlerts(): boolean {
-  return auth.user?.role === 'admin' || auth.user?.role === 'user';
+  return (
+    publicMode.enabled || auth.user?.role === 'admin' || auth.user?.role === 'user'
+  );
 }
 export function canEditAlerts(): boolean {
   return auth.user?.role === 'admin' || auth.user?.role === 'user';

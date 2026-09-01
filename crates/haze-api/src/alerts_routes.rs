@@ -1,8 +1,9 @@
 //! /api/v1/alerts/* - rule CRUD, current alert states, webhook library.
 //!
 //! Permission gating:
-//!   - Rules + states: `can_see_alerts()` (admin or user) for reads,
-//!     `can_edit_alerts()` (admin or user) for writes.
+//!   - Rules + states: admin/user, plus anonymous read-only access when
+//!     public mode is enabled. Public responses redact webhook UUIDs.
+//!   - Rule writes: `can_edit_alerts()` (admin or user).
 //!   - Webhook library + test fire: admin only - URLs may carry tokens
 //!     in query strings, so we treat them like settings, not data.
 
@@ -22,7 +23,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::{ChangeKind, error::ApiError, error::ApiResult, state::AppState};
+use crate::{
+    ChangeKind, error::ApiError, error::ApiResult, middleware::ViewerAccess, state::AppState,
+};
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -40,12 +43,27 @@ pub fn router() -> Router<AppState> {
         .route("/webhooks/{uuid}/test", post(test_webhook))
 }
 
-fn require_alert_viewer(u: &CurrentUser) -> ApiResult<()> {
-    if u.role.can_see_alerts() {
+async fn require_alert_viewer(viewer: &ViewerAccess, state: &AppState) -> ApiResult<()> {
+    if viewer
+        .user
+        .as_ref()
+        .is_some_and(|u| u.role.can_see_alerts())
+    {
+        return Ok(());
+    }
+    let public = haze_store::repo::settings::public_mode_settings(&state.pool).await?;
+    if public.enabled {
         Ok(())
     } else {
         Err(ApiError::Forbidden)
     }
+}
+
+fn may_see_webhook_refs(viewer: &ViewerAccess) -> bool {
+    viewer
+        .user
+        .as_ref()
+        .is_some_and(|u| u.role.can_see_alerts())
 }
 
 fn require_alert_editor(u: &CurrentUser) -> ApiResult<()> {
@@ -223,12 +241,24 @@ fn map_repo_err(e: haze_alert::repo::RepoError) -> ApiError {
     tag = "alerts"
 )]
 pub(crate) async fn list_rules(
-    user: CurrentUser,
+    viewer: ViewerAccess,
     State(state): State<AppState>,
 ) -> ApiResult<Json<Vec<AlertRuleResp>>> {
-    require_alert_viewer(&user)?;
+    require_alert_viewer(&viewer, &state).await?;
     let rules = repo::list_rules(&state.pool).await.map_err(map_repo_err)?;
-    Ok(Json(rules.into_iter().map(AlertRuleResp::from).collect()))
+    let include_webhooks = may_see_webhook_refs(&viewer);
+    Ok(Json(
+        rules
+            .into_iter()
+            .map(|rule| {
+                let mut response = AlertRuleResp::from(rule);
+                if !include_webhooks {
+                    response.webhook_uuids.clear();
+                }
+                response
+            })
+            .collect(),
+    ))
 }
 
 #[utoipa::path(
@@ -243,16 +273,20 @@ pub(crate) async fn list_rules(
     tag = "alerts"
 )]
 pub(crate) async fn get_rule(
-    user: CurrentUser,
+    viewer: ViewerAccess,
     State(state): State<AppState>,
     Path(uuid): Path<Uuid>,
 ) -> ApiResult<Json<AlertRuleResp>> {
-    require_alert_viewer(&user)?;
+    require_alert_viewer(&viewer, &state).await?;
     let rule = repo::get_rule_by_uuid(&state.pool, uuid)
         .await
         .map_err(map_repo_err)?
         .ok_or(ApiError::NotFound)?;
-    Ok(Json(AlertRuleResp::from(rule)))
+    let mut response = AlertRuleResp::from(rule);
+    if !may_see_webhook_refs(&viewer) {
+        response.webhook_uuids.clear();
+    }
+    Ok(Json(response))
 }
 
 #[utoipa::path(
@@ -442,11 +476,11 @@ pub(crate) struct ListStatesQuery {
     tag = "alerts"
 )]
 pub(crate) async fn list_states(
-    user: CurrentUser,
+    viewer: ViewerAccess,
     State(state): State<AppState>,
     Query(q): Query<ListStatesQuery>,
 ) -> ApiResult<Json<Vec<AlertStateResp>>> {
-    require_alert_viewer(&user)?;
+    require_alert_viewer(&viewer, &state).await?;
     let rows = if q.include_ok {
         repo::list_states(&state.pool).await
     } else {

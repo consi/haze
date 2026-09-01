@@ -13,7 +13,7 @@ members = [
 [workspace.package]
 version = "0.0.0-dev"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/consi/haze"
 
@@ -83,7 +83,7 @@ futures = "0.3"
 # HTTP + API
 axum = { version = "0.8", features = ["macros", "json", "tokio", "http2"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["trace", "compression-gzip", "compression-br", "set-header"] }
+tower-http = { version = "0.7", features = ["trace", "compression-gzip", "compression-br", "set-header"] }
 http = "1"
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
@@ -110,12 +110,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"]
 clap = { version = "4", features = ["derive", "env"] }
 
 # Crypto / auth
-argon2 = "0.5"
-password-hash = { version = "0.5", features = ["std"] }
+argon2 = "0.6"
+password-hash = { version = "0.6", features = ["getrandom", "phc"] }
 webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation", "conditional-ui"] }
-rand = "0.8"
-sha2 = "0.10"
-base64 = "0.22"
+rand = "0.10"
+sha2 = "0.11"
+base64 = "0.23"
 
 # TLS - `ring` enabled so rustls has a crypto provider compiled in.
 # `CryptoProvider::install_default()` is still required at startup, but the
@@ -123,13 +123,13 @@ base64 = "0.22"
 rustls = { version = "0.23", features = ["ring"] }
 tokio-rustls = "0.26"
 rustls-pemfile = "2"
-webpki-roots = "0.26"
+webpki-roots = "1.0"
 
 # Probes
-surge-ping = "0.8"
+surge-ping = "0.9"
 hickory-resolver = "0.26"
 url = "2"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream", "json", "query"] }
 
 # Storage
 memmap2 = "0.9"
@@ -148,7 +148,7 @@ chrono = { version = "0.4", default-features = false, features = ["serde", "cloc
 dashmap = "6"
 bytes = "1"
 zstd = "0.13"
-governor = "0.7"
+governor = "0.10"
 arc-swap = "1"
 
 

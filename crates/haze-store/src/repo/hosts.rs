@@ -30,10 +30,10 @@ pub enum HostError {
 /// Maps the `ux_hosts_display_name` unique-index violation to a typed
 /// error so the API can return 409 with a friendly message.
 fn map_name_unique(e: sqlx::Error) -> HostError {
-    if let sqlx::Error::Database(db) = &e {
-        if db.is_unique_violation() {
-            return HostError::NameTaken;
-        }
+    if let sqlx::Error::Database(db) = &e
+        && db.is_unique_violation()
+    {
+        return HostError::NameTaken;
     }
     HostError::Db(e)
 }

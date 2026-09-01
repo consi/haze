@@ -10,14 +10,6 @@ ignore = [
     # is a procedural macro for token pasting, used at build time only,
     # zero runtime exposure. Revisit when utoipa-axum drops the dep.
     "RUSTSEC-2024-0436",
-    # rsa "Marvin Attack" timing sidechannel. Upstream advisory says "no
-    # fixed upgrade available". The crate is pulled in transitively by
-    # sqlx-mysql, which ships in sqlx-macros for compile-time SQL checking
-    # against any configured backend. Haze only enables sqlx's "sqlite"
-    # feature at runtime, so the rsa codepath is never linked into the
-    # running binary nor executed by the macro. Revisit when sqlx ships a
-    # fix or splits macros per backend.
-    "RUSTSEC-2023-0071",
 ]
 
 [licenses]

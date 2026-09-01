@@ -18,7 +18,6 @@ use std::{
 use anyhow::{Context, Result};
 use dashmap::DashMap;
 use haze_store::{HzcStore, SampleEvent, SeriesStore, WorkerPools, aggregate};
-use rand::Rng;
 use sqlx::SqlitePool;
 use surge_ping::PingIdentifier;
 use tokio::{
@@ -418,7 +417,7 @@ async fn host_loop(
     } else {
         0
     };
-    let jitter_ms = rand::thread_rng().gen_range(0..200u64);
+    let jitter_ms = rand::random_range(0..200u64);
     let start_delay = phase_ms
         .saturating_add(jitter_ms)
         .min(window_ms.saturating_sub(1));

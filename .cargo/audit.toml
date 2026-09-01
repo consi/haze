@@ -1,4 +1,5 @@
-# cargo-audit ignore list. Mirrors the ignores in `deny.toml`.
+# cargo-audit ignore list. This can include lockfile-only crates that the
+# feature-aware `cargo deny` graph correctly excludes.
 #
 # cargo-audit walks the lockfile without feature resolution, so it will
 # always report transitive crates that are present in Cargo.lock even when
@@ -10,11 +11,8 @@
 ignore = [
     # paste, unmaintained. See deny.toml for full rationale.
     "RUSTSEC-2024-0436",
-    # rsa Marvin Attack, no fix available. Pulled in via sqlx-mysql, which
-    # is dragged into the dep graph by sqlx-macros for compile-time SQL
-    # checking. Haze only enables sqlx's "sqlite" feature; the rsa
-    # codepath is never linked into the running binary. cargo-deny (which
-    # is feature-aware) does not flag this. See deny.toml for the full
-    # rationale.
+    # rsa Marvin Attack, no fix available. Pulled into Cargo.lock through
+    # sqlx-macros' MySQL support; Haze enables SQLite only, and cargo-deny's
+    # feature-aware graph confirms the vulnerable crate is not linked.
     "RUSTSEC-2023-0071",
 ]

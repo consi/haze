@@ -83,7 +83,7 @@ impl IntoResponse for ApiError {
         }
 
         let body = json!({
-            "type": format!("about:blank"),
+            "type": "about:blank",
             "title": title,
             "status": status.as_u16(),
             "detail": self.to_string(),

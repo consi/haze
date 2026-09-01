@@ -14,7 +14,6 @@
 use std::{sync::Arc, time::Duration};
 
 use haze_store::{SeriesStore, Slot, repo::settings};
-use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tokio::sync::Notify;
@@ -124,8 +123,7 @@ pub fn run_flush(
             let base = u64::from(cfg.snapshot_flush_interval_secs.max(1));
             let jitter_max = base * FLUSH_JITTER_FRACTION_PCT / 100;
             let jitter = if jitter_max > 0 {
-                let mut rng = rand::thread_rng();
-                Duration::from_secs(rng.gen_range(0..jitter_max))
+                Duration::from_secs(rand::random_range(0..jitter_max))
             } else {
                 Duration::ZERO
             };

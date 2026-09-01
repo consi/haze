@@ -26,13 +26,8 @@ export function samplesForWidth(chartPx: number): number {
 }
 
 const cache = new Map<string, SeriesResp>();
-/** Dedup keyed by full cache key, not by host. Two callers asking for the
- *  same (host, bucket-aligned range, budget) at the same time share one
- *  network request. Two callers asking for DIFFERENT ranges of the same
- *  host get DIFFERENT entries here, so neither cancels the other - the
- *  previous design (one controller per host) used to abort whichever
- *  request arrived first when SmallMultiples fired its four panels in
- *  parallel, leaving 3 panels stuck on "Loading…". */
+/** Deduplicate identical concurrent requests while allowing different ranges
+ *  for the same host to load independently. */
 const pending = new Map<string, Promise<SeriesResp>>();
 
 function alignDown(value: number, step: number): number {

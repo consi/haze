@@ -43,34 +43,33 @@ pub async fn session_layer(
 
     // 2. Bearer token (machine clients), only if no cookie session attached.
     let mut bearer_replication_only = false;
-    if req.extensions().get::<CurrentUser>().is_none() {
-        if let Some(bearer) = req
+    if req.extensions().get::<CurrentUser>().is_none()
+        && let Some(bearer) = req
             .headers()
             .get(header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.strip_prefix("Bearer ").map(str::to_owned))
-        {
-            match api_token::lookup_user(&state.pool, &bearer).await {
-                Ok(Some(auth)) => {
-                    if let Ok(Some(row)) = user::find_by_id(&state.pool, auth.user_id).await {
-                        let role = row.role.parse::<Role>().unwrap_or(Role::Disabled);
-                        // Reject Bearer auth for disabled accounts - same gate
-                        // as the login endpoint so tokens stop working when an
-                        // account is disabled, without needing to revoke each
-                        // token individually.
-                        if role.is_active() {
-                            req.extensions_mut().insert(CurrentUser {
-                                id: row.id,
-                                username: row.username,
-                                role,
-                            });
-                            bearer_replication_only = auth.replication_only;
-                        }
+    {
+        match api_token::lookup_user(&state.pool, &bearer).await {
+            Ok(Some(auth)) => {
+                if let Ok(Some(row)) = user::find_by_id(&state.pool, auth.user_id).await {
+                    let role = row.role.parse::<Role>().unwrap_or(Role::Disabled);
+                    // Reject Bearer auth for disabled accounts - same gate
+                    // as the login endpoint so tokens stop working when an
+                    // account is disabled, without needing to revoke each
+                    // token individually.
+                    if role.is_active() {
+                        req.extensions_mut().insert(CurrentUser {
+                            id: row.id,
+                            username: row.username,
+                            role,
+                        });
+                        bearer_replication_only = auth.replication_only;
                     }
                 }
-                Ok(None) => {}
-                Err(e) => tracing::debug!(error = ?e, "bearer token lookup failed"),
             }
+            Ok(None) => {}
+            Err(e) => tracing::debug!(error = ?e, "bearer token lookup failed"),
         }
     }
 
@@ -102,10 +101,10 @@ fn is_replication_path(path: &str) -> bool {
 fn extract_cookie(header_value: &str, name: &str) -> Option<String> {
     for kv in header_value.split(';') {
         let kv = kv.trim();
-        if let Some((k, v)) = kv.split_once('=') {
-            if k == name {
-                return Some(v.to_string());
-            }
+        if let Some((k, v)) = kv.split_once('=')
+            && k == name
+        {
+            return Some(v.to_string());
         }
     }
     None

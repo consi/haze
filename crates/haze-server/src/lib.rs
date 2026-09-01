@@ -752,11 +752,9 @@ async fn ensure_bootstrap_admin(pool: &sqlx::SqlitePool) -> Result<()> {
 /// Crypto-safe password from a URL-safe alphabet. 16 chars over a 64-symbol
 /// set is ~96 bits of entropy, plenty for a one-off bootstrap secret.
 fn generate_password(len: usize) -> String {
-    use rand::Rng;
     const CHARSET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789-_";
-    let mut rng = rand::thread_rng();
     (0..len)
-        .map(|_| char::from(CHARSET[rng.gen_range(0..CHARSET.len())]))
+        .map(|_| char::from(CHARSET[rand::random_range(0..CHARSET.len())]))
         .collect()
 }
 

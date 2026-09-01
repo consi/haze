@@ -134,10 +134,10 @@ impl HzcStore {
                 if !entry.file_type()?.is_dir() {
                     continue;
                 }
-                if let Some(name) = entry.file_name().to_str() {
-                    if let Ok(uuid) = Uuid::parse_str(name) {
-                        out.push(uuid);
-                    }
+                if let Some(name) = entry.file_name().to_str()
+                    && let Ok(uuid) = Uuid::parse_str(name)
+                {
+                    out.push(uuid);
                 }
             }
         }

@@ -5,6 +5,7 @@
   import { type Host, type SeriesResp } from '$lib/api';
   import { cancelInflight, isAbortError, loadSeries, samplesForWidth } from '$lib/series';
   import SmokeChart from './SmokeChart.svelte';
+  import GraphLoadingSpinner from './GraphLoadingSpinner.svelte';
 
   let {
     host,
@@ -31,6 +32,7 @@
   let loading = $state(false);
   let err = $state<string | null>(null);
   let targetSamples = $state(samplesForWidth(600));
+  let seriesRequestId = 0;
 
   // IntersectionObserver: only fetch + render the SmokeChart when this
   // card is actually on-screen. With hundreds of hosts in a group we
@@ -110,20 +112,22 @@
   });
 
   async function refresh() {
+    const requestId = ++seriesRequestId;
     loading = true;
     err = null;
     try {
-      series = await loadSeries({
+      const next = await loadSeries({
         hostUuid: host.uuid,
         fromSecs,
         toSecs,
         targetSamples
       });
+      if (requestId === seriesRequestId) series = next;
     } catch (e) {
       if (isAbortError(e)) return;
-      err = e instanceof Error ? e.message : String(e);
+      if (requestId === seriesRequestId) err = e instanceof Error ? e.message : String(e);
     } finally {
-      loading = false;
+      if (requestId === seriesRequestId) loading = false;
     }
   }
 
@@ -151,9 +155,6 @@
     </span>
     <span>·</span>
     <span>every {host.interval_secs}s × {host.samples_per_period} samples</span>
-    {#if loading}
-      <span class="ml-auto text-[10px]">loading…</span>
-    {/if}
   </header>
 
   <!-- Locked height. The pin matters because SmokeChart only mounts when
@@ -163,7 +164,7 @@
        loads, which shift more cards... an infinite cancel-storm. The
        overflow-hidden on the outer card protects against the stats lines
        wrapping on narrow widths. -->
-  <div bind:this={chartHost} class="w-full flex-1 min-h-0">
+  <div bind:this={chartHost} class="relative w-full flex-1 min-h-0">
     {#if !visible}
       <!-- Placeholder while off-screen: keeps layout stable so the
            container scroll height doesn't jump as cards activate. -->
@@ -178,8 +179,9 @@
         height={182}
         title={host.display_name}
       />
-    {:else}
-      <p class="text-xs p-2" style="color: var(--muted)">Loading…</p>
+    {/if}
+    {#if visible && (loading || (!series && !err))}
+      <GraphLoadingSpinner />
     {/if}
   </div>
 </div>

@@ -42,6 +42,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: cd frontend && npm ci
+      - run: cd frontend && npm audit --audit-level=moderate
       - run: cd frontend && npm run check
       - run: cd frontend && npm run build
 
@@ -59,15 +60,11 @@ jobs:
       - name: cargo-audit
         run: |
           cargo install --locked cargo-audit
-          # Ignored advisories (see deny.toml for full rationale):
-          #   RUSTSEC-2026-0119  hickory-proto DNS encode O(n²) — we only
-          #                      encode single-question stub queries, no
-          #                      attacker input on the wire.
+          # Ignored advisories (documented here and in audit policy):
           #   RUSTSEC-2024-0436  paste unmaintained — proc-macro, build
           #                      time only, pulled by utoipa-axum.
-          #   RUSTSEC-2023-0071  rsa Marvin timing sidechannel — pulled by
-          #                      sqlx for MySQL auth only; haze is SQLite.
+          #   RUSTSEC-2023-0071  rsa Marvin timing sidechannel — present in
+          #                      sqlx macros' MySQL graph; Haze is SQLite.
           cargo audit \
-            --ignore RUSTSEC-2026-0119 \
             --ignore RUSTSEC-2024-0436 \
             --ignore RUSTSEC-2023-0071

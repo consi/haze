@@ -5,23 +5,40 @@
   let {
     title,
     onClose,
-    children
+    children,
+    wide = false
   }: {
+    wide?: boolean;
     title: string;
     onClose: () => void;
     children: import('svelte').Snippet;
   } = $props();
 
+  let dialog: HTMLDivElement;
+
   // Close on Esc. Mounted on window so the modal doesn't have to be focused.
   onMount(() => {
     const stopViewport = startViewportTracking();
+    const priorFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialog?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      if (e.key === 'Tab' && dialog) {
+        const items = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')).filter(el => el.getClientRects().length);
+        const first=items[0],last=items[items.length-1];
+        if(!first){e.preventDefault();dialog.focus();}
+        else if(e.shiftKey && (document.activeElement===first||document.activeElement===dialog)){e.preventDefault();last.focus();}
+        else if(!e.shiftKey && (document.activeElement===last||document.activeElement===dialog)){e.preventDefault();first.focus();}
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
       stopViewport();
+      document.body.style.overflow = previousOverflow;
+      priorFocus?.focus();
     };
   });
 
@@ -67,12 +84,14 @@
 >
   <div
     class="
-      w-full md:max-w-2xl md:my-16 md:mx-4
+      w-full {wide ? 'md:my-3 md:mx-3 md:h-[calc(100dvh-1.5rem)] md:max-h-[calc(100dvh-1.5rem)]' : 'md:max-w-2xl md:my-16 md:mx-4 md:max-h-[calc(100vh-8rem)]'}
       md:rounded md:border md:shadow-lg
       flex flex-col
-      max-h-full md:max-h-[calc(100vh-8rem)]
+      max-h-full
     "
     style="background: var(--bg); border-color: var(--border)"
+    bind:this={dialog}
+    tabindex="-1"
     role="dialog"
     aria-modal="true"
     aria-label={title}

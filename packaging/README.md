@@ -39,3 +39,12 @@ sudo journalctl -u haze -f
 
 Migrations are applied automatically on startup; no manual `migrate`
 step is required.
+
+## Upgrading for route history
+
+Install the newer package and restart `haze`. Existing databases migrate on
+startup; graph chunks retain their existing format. Metadata storage is created
+lazily and route history begins after ten ICMP monitoring periods. The existing
+`CAP_NET_RAW` service capability covers native traceroutes; no new OS dependency
+is needed. Older replication peers continue transferring graph samples.
+See [route-history storage and capacity notes](../docs/route-history.md).

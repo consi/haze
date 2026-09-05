@@ -29,6 +29,14 @@ pub fn router() -> Router<AppState> {
         .route("/", get(list).post(create))
         .route("/{uuid}", get(get_one).patch(update).delete(delete))
         .route("/{uuid}/series", get(series))
+        .route(
+            "/{uuid}/route-history",
+            get(crate::metadata_routes::history),
+        )
+        .route(
+            "/{uuid}/route-history/{id}",
+            get(crate::metadata_routes::detail),
+        )
 }
 
 #[derive(Deserialize)]

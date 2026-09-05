@@ -1,0 +1,856 @@
+//! Versioned, append-only host metadata. Independent of the HZC sample format.
+//!
+//! Immutable blocks contain their own context dictionary; the WAL is checksummed
+//! and synced in background batches. Sequence numbers are local ingestion
+//! order, while UUIDs survive replication and provide idempotency.
+use anyhow::{Context, Result, bail, ensure};
+use dashmap::DashMap;
+use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::{
+    collections::{BTreeMap, HashSet},
+    fs::{self, File, OpenOptions},
+    io::{Read, Write},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+use tokio::sync::broadcast;
+use uuid::Uuid;
+
+const MAX_RECORD: usize = 256 * 1024;
+const MAX_BLOCK: u64 = 8 * 1024 * 1024;
+const BLOCK_RECORDS: usize = 128;
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct MetadataRecord {
+    pub id: Uuid,
+    pub host_uuid: Uuid,
+    pub timestamp: i64,
+    pub kind: String,
+    pub version: u16,
+    /// Repeated structure (for traces, the route and historical DNS names).
+    pub context: Value,
+    /// Observation-specific measurements.
+    pub data: Value,
+    #[serde(default)]
+    pub sequence: u64,
+}
+impl MetadataRecord {
+    pub fn new(host_uuid: Uuid, timestamp: i64, kind: &str, context: Value, data: Value) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            host_uuid,
+            timestamp,
+            kind: kind.into(),
+            version: 1,
+            context,
+            data,
+            sequence: 0,
+        }
+    }
+    pub fn event(&self) -> &str {
+        self.data.get("event").and_then(Value::as_str).unwrap_or("")
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct MetadataPage {
+    pub records: Vec<MetadataRecord>,
+    pub next: Option<u64>,
+    pub earliest_sequence: Option<u64>,
+}
+#[derive(Serialize, Deserialize)]
+struct Block {
+    version: u16,
+    contexts: Vec<Value>,
+    records: Vec<PackedRecord>,
+}
+#[derive(Serialize, Deserialize)]
+struct PackedRecord {
+    id: Uuid,
+    timestamp_delta: i64,
+    kind: String,
+    version: u16,
+    context: usize,
+    data: Value,
+    sequence: u64,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct IndexEntry {
+    id: Uuid,
+    timestamp: i64,
+    sequence: u64,
+    kind: String,
+    event: String,
+    data: Value,
+}
+#[derive(Serialize, Deserialize)]
+struct Header {
+    version: u16,
+    host: Uuid,
+    start: i64,
+    end: i64,
+    first: u64,
+    last: u64,
+    entries: Vec<IndexEntry>,
+}
+#[derive(Default)]
+struct HostState {
+    loaded: bool,
+    next: u64,
+    pending: Vec<MetadataRecord>,
+    deleted: bool,
+    files: Vec<PathBuf>,
+    checkpoints: BTreeMap<String, Value>,
+    wal_dirty: bool,
+}
+pub struct MetadataStore {
+    root: PathBuf,
+    hosts: DashMap<Uuid, Arc<Mutex<HostState>>>,
+    events: broadcast::Sender<MetadataRecord>,
+}
+impl MetadataStore {
+    pub fn new(root: PathBuf) -> Self {
+        let (events, _) = broadcast::channel(4096);
+        Self {
+            root,
+            hosts: DashMap::new(),
+            events,
+        }
+    }
+    pub fn subscribe(&self) -> broadcast::Receiver<MetadataRecord> {
+        self.events.subscribe()
+    }
+    fn dir(&self, host: Uuid) -> PathBuf {
+        crate::host_directory(&self.root, host).join("metadata")
+    }
+    fn state(&self, host: Uuid) -> Arc<Mutex<HostState>> {
+        self.hosts.entry(host).or_default().clone()
+    }
+    fn load(&self, host: Uuid, state: &mut HostState) -> Result<()> {
+        if state.loaded {
+            return Ok(());
+        }
+        let dir = self.dir(host);
+        let mut last = 0;
+        state.files = blocks(&dir)?;
+        for path in &state.files {
+            last = last.max(read_header(path)?.last);
+        }
+        let wal = dir.join("active.wal");
+        if wal.exists() {
+            let (records, valid) = replay(&wal)?;
+            OpenOptions::new().write(true).open(&wal)?.set_len(valid)?;
+            state.pending = records.into_iter().filter(|r| r.sequence > last).collect();
+        }
+        state.next = state
+            .pending
+            .iter()
+            .map(|r| r.sequence)
+            .max()
+            .unwrap_or(last)
+            .max(last)
+            + 1;
+        // Keep sequence monotonic even after retention removes all blocks.
+        if let Ok(bytes) = fs::read(dir.join("sequence")) {
+            state.next = state.next.max(String::from_utf8(bytes)?.parse::<u64>()?);
+        }
+        state.wal_dirty = !state.pending.is_empty();
+        state.loaded = true;
+        Ok(())
+    }
+    /// Append an externally supplied record idempotently, including after restart.
+    pub fn append(&self, record: MetadataRecord, window_secs: u32) -> Result<bool> {
+        self.append_record(record, window_secs, true)
+    }
+    /// Fresh UUIDs generated by the local collector do not need a disk-index lookup.
+    pub fn append_local(&self, record: MetadataRecord, window_secs: u32) -> Result<bool> {
+        self.append_record(record, window_secs, false)
+    }
+    fn append_record(
+        &self,
+        mut record: MetadataRecord,
+        window_secs: u32,
+        deduplicate: bool,
+    ) -> Result<bool> {
+        ensure!(
+            record.version == 1,
+            "unsupported metadata record version {}",
+            record.version
+        );
+        ensure!(record.kind.len() <= 64, "metadata kind too long");
+        ensure!(
+            serde_json::to_vec(&record)?.len() <= MAX_RECORD,
+            "metadata record too large"
+        );
+        let host = record.host_uuid;
+        let state = self.state(host);
+        let mut state = state.lock();
+        ensure!(!state.deleted, "metadata host deleted");
+        self.load(host, &mut state)?;
+        if state.pending.iter().any(|r| r.id == record.id) {
+            return Ok(false);
+        }
+        // Only the matching time window can contain this immutable origin ID.
+        for path in state.files.iter().filter(|_| deduplicate) {
+            if !filename_overlaps(path, record.timestamp, record.timestamp) {
+                continue;
+            }
+            let header = read_header(path)?;
+            if record.timestamp >= header.start
+                && record.timestamp <= header.end
+                && header.entries.iter().any(|e| e.id == record.id)
+            {
+                return Ok(false);
+            }
+        }
+        let window = i64::from(window_secs.max(60));
+        if state.pending.len() >= BLOCK_RECORDS
+            || state
+                .pending
+                .iter()
+                .map(|r| r.data.to_string().len() + r.context.to_string().len())
+                .sum::<usize>()
+                > MAX_BLOCK as usize / 2
+            || state.pending.first().is_some_and(|r| {
+                r.timestamp.div_euclid(window) != record.timestamp.div_euclid(window)
+            })
+        {
+            self.seal(host, &mut state)?;
+        }
+        record.sequence = state.next;
+        let dir = self.dir(host);
+        fs::create_dir_all(&dir)?;
+        let bytes = serde_json::to_vec(&record)?;
+        let mut wal = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dir.join("active.wal"))?;
+        wal.write_all(&u32::try_from(bytes.len())?.to_le_bytes())?;
+        wal.write_all(&Sha256::digest(&bytes))?;
+        wal.write_all(&bytes)?;
+        // Match HZC: kernel writeback on the hot path, periodic/background sync.
+        state.wal_dirty = true;
+        state.next += 1;
+        state.pending.push(record.clone());
+        let _ = self.events.send(record);
+        Ok(true)
+    }
+    fn seal(&self, host: Uuid, state: &mut HostState) -> Result<()> {
+        if state.pending.is_empty() {
+            return Ok(());
+        }
+        let dir = self.dir(host);
+        write_block(&dir, host, &state.pending)?;
+        atomic_write(&dir.join("sequence"), state.next.to_string().as_bytes())?;
+        File::create(dir.join("active.wal"))?.sync_all()?;
+        state.pending.clear();
+        state.files = blocks(&dir)?;
+        Ok(())
+    }
+    /// Ingestion-order pagination is independent of observation timestamps.
+    pub fn page(&self, host: Uuid, after: u64, limit: usize) -> Result<MetadataPage> {
+        self.flush(host)?;
+        let state = self.state(host);
+        let mut state = state.lock();
+        self.load(host, &mut state)?;
+        let mut records = Vec::new();
+        let mut earliest = state.pending.first().map(|r| r.sequence);
+        for path in &state.files {
+            let header = read_header(path)?;
+            earliest = Some(earliest.map_or(header.first, |n| n.min(header.first)));
+            if header.last > after {
+                records.extend(read_block(path)?.into_iter().filter(|r| r.sequence > after));
+            }
+            if records.len() > limit {
+                break;
+            }
+        }
+        records.extend(state.pending.iter().filter(|r| r.sequence > after).cloned());
+        records.sort_by_key(|r| r.sequence);
+        let more = records.len() > limit;
+        records.truncate(limit.clamp(1, 1000));
+        Ok(MetadataPage {
+            next: if more {
+                records.last().map(|r| r.sequence)
+            } else {
+                None
+            },
+            records,
+            earliest_sequence: earliest,
+        })
+    }
+    pub fn range(&self, host: Uuid, from: i64, to: i64) -> Result<Vec<MetadataRecord>> {
+        let state = self.state(host);
+        let mut state = state.lock();
+        self.load(host, &mut state)?;
+        let mut out = Vec::new();
+        for path in &state.files {
+            if !filename_overlaps(path, from, to) {
+                continue;
+            }
+            let h = read_header(path)?;
+            if h.end >= from && h.start <= to {
+                out.extend(
+                    read_block(path)?
+                        .into_iter()
+                        .filter(|r| r.timestamp >= from && r.timestamp <= to),
+                );
+            }
+        }
+        out.extend(
+            state
+                .pending
+                .iter()
+                .filter(|r| r.timestamp >= from && r.timestamp <= to)
+                .cloned(),
+        );
+        out.sort_by_key(|r| (r.timestamp, r.id));
+        Ok(out)
+    }
+    /// Lightweight indexes make long-range event navigation independent of payload size.
+    pub fn index(&self, host: Uuid, from: i64, to: i64) -> Result<Vec<MetadataRecord>> {
+        let state = self.state(host);
+        let mut state = state.lock();
+        self.load(host, &mut state)?;
+        let mut entries = Vec::new();
+        for path in &state.files {
+            if !filename_overlaps(path, from, to) {
+                continue;
+            }
+            let h = read_header(path)?;
+            if h.end >= from && h.start <= to {
+                entries.extend(h.entries);
+            }
+        }
+        entries.extend(state.pending.iter().map(index_entry));
+        let mut out: Vec<_> = entries
+            .into_iter()
+            .filter(|e| e.timestamp >= from && e.timestamp <= to)
+            .map(|e| MetadataRecord {
+                id: e.id,
+                host_uuid: host,
+                timestamp: e.timestamp,
+                kind: e.kind,
+                version: 1,
+                context: Value::Null,
+                data: e.data,
+                sequence: e.sequence,
+            })
+            .collect();
+        out.sort_by_key(|r| (r.timestamp, r.id));
+        Ok(out)
+    }
+    pub fn predecessor(
+        &self,
+        host: Uuid,
+        timestamp: i64,
+        id: Uuid,
+        kind: &str,
+    ) -> Result<Option<MetadataRecord>> {
+        let state = self.state(host);
+        let mut state = state.lock();
+        self.load(host, &mut state)?;
+        let mut best = state
+            .pending
+            .iter()
+            .filter(|r| r.kind == kind && (r.timestamp, r.id) < (timestamp, id))
+            .max_by_key(|r| (r.timestamp, r.id))
+            .cloned();
+        for path in state.files.iter().rev() {
+            if !filename_overlaps(path, best.as_ref().map_or(0, |r| r.timestamp), timestamp) {
+                continue;
+            }
+            let header = read_header(path)?;
+            if let Some(entry) = header
+                .entries
+                .iter()
+                .filter(|e| {
+                    e.kind == kind
+                        && (e.timestamp, e.id) < (timestamp, id)
+                        && best
+                            .as_ref()
+                            .is_none_or(|r| (r.timestamp, r.id) < (e.timestamp, e.id))
+                })
+                .max_by_key(|e| (e.timestamp, e.id))
+            {
+                best = read_block(path)?.into_iter().find(|r| r.id == entry.id);
+            }
+        }
+        Ok(best)
+    }
+    pub fn get(&self, host: Uuid, id: Uuid) -> Result<Option<MetadataRecord>> {
+        let state = self.state(host);
+        let mut state = state.lock();
+        self.load(host, &mut state)?;
+        if let Some(r) = state.pending.iter().find(|r| r.id == id) {
+            return Ok(Some(r.clone()));
+        }
+        for path in &state.files {
+            if read_header(path)?.entries.iter().any(|e| e.id == id) {
+                return Ok(read_block(path)?.into_iter().find(|r| r.id == id));
+            }
+        }
+        Ok(None)
+    }
+    pub fn checkpoint(&self, host: Uuid, key: &str, value: &Value) -> Result<()> {
+        ensure!(
+            key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'),
+            "invalid checkpoint key"
+        );
+        let state = self.state(host);
+        let mut state = state.lock();
+        ensure!(!state.deleted, "metadata host deleted");
+        state.checkpoints.insert(key.into(), value.clone());
+        Ok(())
+    }
+    pub fn read_checkpoint(&self, host: Uuid, key: &str) -> Result<Value> {
+        ensure!(
+            key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'),
+            "invalid checkpoint key"
+        );
+        let cached = self.state(host).lock().checkpoints.get(key).cloned();
+        if let Some(value) = cached {
+            return Ok(value);
+        }
+        let path = self.dir(host).join(format!("{key}.json"));
+        if !path.exists() {
+            return Ok(Value::Null);
+        }
+        Ok(serde_json::from_slice(&fs::read(path)?)?)
+    }
+    /// Batch durability boundary; replication calls this before advancing its cursor.
+    pub fn flush(&self, host: Uuid) -> Result<()> {
+        self.flush_inner(host, true)
+    }
+    fn flush_inner(&self, host: Uuid, durable_checkpoints: bool) -> Result<()> {
+        let state = self.state(host);
+        let mut state = state.lock();
+        self.load(host, &mut state)?;
+        if (!state.wal_dirty && state.checkpoints.is_empty()) || state.deleted {
+            return Ok(());
+        }
+        let dir = self.dir(host);
+        fs::create_dir_all(&dir)?;
+        let wal = dir.join("active.wal");
+        if state.wal_dirty && wal.exists() {
+            OpenOptions::new().write(true).open(wal)?.sync_data()?;
+        }
+        for (key, value) in &state.checkpoints {
+            let path = dir.join(format!("{key}.json"));
+            let bytes = serde_json::to_vec(value)?;
+            if durable_checkpoints {
+                atomic_write(&path, &bytes)?;
+            } else {
+                // Cadence is a restart hint: do not issue thousands of fsyncs
+                // just to advance counters. Replication checkpoints use flush().
+                let tmp = path.with_extension("tmp");
+                fs::write(&tmp, bytes)?;
+                fs::rename(tmp, path)?;
+            }
+        }
+        state.wal_dirty = false;
+        state.checkpoints.clear();
+        Ok(())
+    }
+    pub fn flush_all(&self) -> Result<()> {
+        let hosts: Vec<_> = self.hosts.iter().map(|h| *h.key()).collect();
+        for host in hosts {
+            self.flush(host)?;
+        }
+        Ok(())
+    }
+    pub fn flush_background(&self) -> Result<()> {
+        let hosts: Vec<_> = self.hosts.iter().map(|h| *h.key()).collect();
+        for host in hosts {
+            self.flush_inner(host, false)?;
+        }
+        Ok(())
+    }
+    pub fn delete(&self, host: Uuid) {
+        self.state(host).lock().deleted = true;
+    }
+    /// Keep the last pre-cutoff trace and loss state as boundary context.
+    pub fn maintain(&self, host: Uuid, cutoff: i64) -> Result<()> {
+        let state = self.state(host);
+        let mut state = state.lock();
+        self.load(host, &mut state)?;
+        self.seal(host, &mut state)?;
+        let dir = self.dir(host);
+        let paths = blocks(&dir)?;
+        let mut baseline: BTreeMap<String, (i64, PathBuf)> = BTreeMap::new();
+        for path in &paths {
+            let h = read_header(path)?;
+            for e in &h.entries {
+                if e.timestamp < cutoff
+                    && baseline
+                        .get(&e.kind)
+                        .is_none_or(|(ts, _)| *ts < e.timestamp)
+                {
+                    baseline.insert(e.kind.clone(), (e.timestamp, path.clone()));
+                }
+            }
+        }
+        let keep: HashSet<_> = baseline.values().map(|(_, p)| p.clone()).collect();
+        for path in paths {
+            if read_header(&path)?.end < cutoff && !keep.contains(&path) {
+                fs::remove_file(path)?;
+            }
+        }
+        compact_daily(&dir, host)?;
+        state.files = blocks(&dir)?;
+        Ok(())
+    }
+}
+fn index_entry(r: &MetadataRecord) -> IndexEntry {
+    let mut data = r.data.clone();
+    if let Some(o) = data.as_object_mut() {
+        o.remove("hops");
+    }
+    IndexEntry {
+        id: r.id,
+        timestamp: r.timestamp,
+        sequence: r.sequence,
+        kind: r.kind.clone(),
+        event: r.event().into(),
+        data,
+    }
+}
+fn filename_overlaps(path: &Path, from: i64, to: i64) -> bool {
+    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        return true;
+    };
+    let fields: Vec<_> = name.trim_end_matches(".hzm.zst").split('_').collect();
+    if fields.len() != 4 {
+        return true;
+    }
+    match (fields[2].parse::<i64>(), fields[3].parse::<i64>()) {
+        (Ok(start), Ok(end)) => end >= from && start <= to,
+        _ => true,
+    }
+}
+fn blocks(dir: &Path) -> Result<Vec<PathBuf>> {
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    for e in fs::read_dir(dir)? {
+        let p = e?.path();
+        if p.extension().is_some_and(|e| e == "zst") {
+            out.push(p);
+        }
+    }
+    out.sort_by_key(|p| {
+        let (a, b) = filename_sequence(p).unwrap_or((0, 0));
+        (a, std::cmp::Reverse(b))
+    });
+    let mut covered = 0;
+    out.retain(|p| {
+        let (_, last) = filename_sequence(p).unwrap_or((0, u64::MAX));
+        if last <= covered {
+            false
+        } else {
+            covered = last;
+            true
+        }
+    });
+    Ok(out)
+}
+fn filename_sequence(path: &Path) -> Option<(u64, u64)> {
+    let mut parts = path.file_name()?.to_str()?.split('_');
+    Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
+}
+fn compact_daily(dir: &Path, host: Uuid) -> Result<()> {
+    let today = chrono::Utc::now().timestamp().div_euclid(86400);
+    let mut group = Vec::new();
+    let mut records = Vec::new();
+    let mut day = None;
+    let mut last = 0;
+    let mut bytes = 0;
+    for path in blocks(dir)? {
+        let h = read_header(&path)?;
+        let current = h.start.div_euclid(86400);
+        if current >= today || current != h.end.div_euclid(86400) {
+            merge_blocks(dir, host, &mut group, &mut records)?;
+            day = None;
+            continue;
+        }
+        let next = read_block(&path)?;
+        let size = serde_json::to_vec(&next)?.len();
+        if day != Some(current)
+            || h.first != last + 1
+            || records.len() + next.len() > 1024
+            || bytes + size > MAX_BLOCK as usize / 2
+        {
+            merge_blocks(dir, host, &mut group, &mut records)?;
+            bytes = 0;
+        }
+        day = Some(current);
+        last = h.last;
+        bytes += size;
+        group.push(path);
+        records.extend(next);
+    }
+    merge_blocks(dir, host, &mut group, &mut records)
+}
+fn merge_blocks(
+    dir: &Path,
+    host: Uuid,
+    paths: &mut Vec<PathBuf>,
+    records: &mut Vec<MetadataRecord>,
+) -> Result<()> {
+    if paths.len() > 1 {
+        write_block(dir, host, records)?;
+        for p in paths.iter() {
+            fs::remove_file(p)?;
+        }
+        File::open(dir)?.sync_all()?;
+    }
+    paths.clear();
+    records.clear();
+    Ok(())
+}
+fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
+    let tmp = path.with_extension("tmp");
+    let mut f = File::create(&tmp)?;
+    f.write_all(bytes)?;
+    f.sync_all()?;
+    fs::rename(tmp, path)?;
+    File::open(path.parent().context("metadata parent")?)?.sync_all()?;
+    Ok(())
+}
+fn write_block(dir: &Path, host: Uuid, records: &[MetadataRecord]) -> Result<()> {
+    let start = records
+        .iter()
+        .map(|r| r.timestamp)
+        .min()
+        .context("empty metadata block")?;
+    let end = records.iter().map(|r| r.timestamp).max().unwrap_or(start);
+    let first = records.iter().map(|r| r.sequence).min().unwrap_or(0);
+    let last = records.iter().map(|r| r.sequence).max().unwrap_or(0);
+    let mut contexts = Vec::new();
+    let mut packed = Vec::new();
+    for r in records {
+        let idx = contexts
+            .iter()
+            .position(|v| v == &r.context)
+            .unwrap_or_else(|| {
+                contexts.push(r.context.clone());
+                contexts.len() - 1
+            });
+        packed.push(PackedRecord {
+            id: r.id,
+            timestamp_delta: r.timestamp - start,
+            kind: r.kind.clone(),
+            version: r.version,
+            context: idx,
+            data: r.data.clone(),
+            sequence: r.sequence,
+        });
+    }
+    let header = serde_json::to_vec(&Header {
+        version: 1,
+        host,
+        start,
+        end,
+        first,
+        last,
+        entries: records.iter().map(index_entry).collect(),
+    })?;
+    let header = zstd::encode_all(header.as_slice(), 3)?;
+    let body = zstd::encode_all(
+        serde_json::to_vec(&Block {
+            version: 1,
+            contexts,
+            records: packed,
+        })?
+        .as_slice(),
+        3,
+    )?;
+    let mut out = b"HZM1".to_vec();
+    out.extend(u32::try_from(header.len())?.to_le_bytes());
+    out.extend(Sha256::digest(&header));
+    out.extend(&header);
+    out.extend(Sha256::digest(&body));
+    out.extend(body);
+    atomic_write(
+        &dir.join(format!("{first:020}_{last:020}_{start}_{end}.hzm.zst")),
+        &out,
+    )
+}
+fn read_header(path: &Path) -> Result<Header> {
+    let mut file = File::open(path)?;
+    let mut prefix = [0; 8];
+    file.read_exact(&mut prefix)?;
+    ensure!(
+        &prefix[..4] == b"HZM1",
+        "unsupported metadata format: {}",
+        path.display()
+    );
+    let n = u32::from_le_bytes(prefix[4..8].try_into()?) as usize;
+    ensure!(n <= MAX_BLOCK as usize, "oversized metadata index");
+    let mut checksum = [0; 32];
+    file.read_exact(&mut checksum)?;
+    let mut bytes = vec![0; n];
+    file.read_exact(&mut bytes)?;
+    ensure!(
+        Sha256::digest(&bytes)[..] == checksum,
+        "metadata index checksum mismatch"
+    );
+    let mut decoded = Vec::new();
+    zstd::stream::read::Decoder::new(bytes.as_slice())?
+        .take(MAX_BLOCK + 1)
+        .read_to_end(&mut decoded)?;
+    ensure!(
+        decoded.len() <= MAX_BLOCK as usize,
+        "oversized metadata index"
+    );
+    let h: Header = serde_json::from_slice(&decoded)?;
+    ensure!(h.version == 1, "unsupported metadata index version");
+    Ok(h)
+}
+fn read_block(path: &Path) -> Result<Vec<MetadataRecord>> {
+    let h = read_header(path)?;
+    let mut f = File::open(path)?;
+    let mut prefix = [0; 8];
+    f.read_exact(&mut prefix)?;
+    let n = u32::from_le_bytes(prefix[4..8].try_into()?) as u64;
+    std::io::Seek::seek(&mut f, std::io::SeekFrom::Start(40 + n))?;
+    let mut checksum = [0; 32];
+    f.read_exact(&mut checksum)?;
+    let mut body = Vec::new();
+    f.take(MAX_BLOCK + 1).read_to_end(&mut body)?;
+    ensure!(
+        body.len() <= MAX_BLOCK as usize && Sha256::digest(&body)[..] == checksum,
+        "metadata block checksum mismatch"
+    );
+    let mut decoded = Vec::new();
+    zstd::stream::read::Decoder::new(body.as_slice())?
+        .take(MAX_BLOCK + 1)
+        .read_to_end(&mut decoded)?;
+    ensure!(
+        decoded.len() <= MAX_BLOCK as usize,
+        "oversized metadata block"
+    );
+    let b: Block = serde_json::from_slice(&decoded)?;
+    ensure!(b.version == 1, "unsupported metadata version");
+    b.records
+        .into_iter()
+        .map(|r| {
+            Ok(MetadataRecord {
+                id: r.id,
+                host_uuid: h.host,
+                timestamp: h
+                    .start
+                    .checked_add(r.timestamp_delta)
+                    .context("timestamp overflow")?,
+                kind: r.kind,
+                version: r.version,
+                context: b
+                    .contexts
+                    .get(r.context)
+                    .context("invalid context reference")?
+                    .clone(),
+                data: r.data,
+                sequence: r.sequence,
+            })
+        })
+        .collect()
+}
+fn replay(path: &Path) -> Result<(Vec<MetadataRecord>, u64)> {
+    let mut f = File::open(path)?;
+    let len = f.metadata()?.len();
+    let mut pos = 0;
+    let mut out = Vec::new();
+    while pos + 36 <= len {
+        let mut header = [0; 36];
+        f.read_exact(&mut header)?;
+        let n = u32::from_le_bytes(header[..4].try_into()?) as usize;
+        if n > MAX_RECORD {
+            bail!("oversized metadata WAL record");
+        }
+        if pos + 36 + n as u64 > len {
+            break;
+        }
+        let mut data = vec![0; n];
+        f.read_exact(&mut data)?;
+        ensure!(
+            Sha256::digest(&data)[..] == header[4..],
+            "metadata WAL checksum mismatch"
+        );
+        out.push(serde_json::from_slice(&data)?);
+        pos += 36 + n as u64;
+    }
+    Ok((out, pos))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn recovery_dedup_and_out_of_order() {
+        let d = tempfile::tempdir().unwrap();
+        let host = Uuid::new_v4();
+        let r = MetadataRecord::new(
+            host,
+            120,
+            "trace",
+            json!({"path":["1.2.3.4"]}),
+            json!({"event":"baseline"}),
+        );
+        {
+            let s = MetadataStore::new(d.path().into());
+            assert!(s.append(r.clone(), 60).unwrap());
+            assert!(!s.append(r.clone(), 60).unwrap());
+            s.append(
+                MetadataRecord::new(host, 10, "trace", r.context.clone(), json!({})),
+                60,
+            )
+            .unwrap();
+        }
+        let s = MetadataStore::new(d.path().into());
+        assert!(!s.append(r, 60).unwrap());
+        assert_eq!(s.range(host, 0, 200).unwrap().len(), 2);
+        let p = s.page(host, 0, 1).unwrap();
+        assert_eq!(p.records[0].timestamp, 120);
+        assert_eq!(
+            s.page(host, p.next.unwrap(), 1).unwrap().records[0].timestamp,
+            10
+        );
+    }
+    #[test]
+    fn partial_wal_and_retention_baseline() {
+        let d = tempfile::tempdir().unwrap();
+        let h = Uuid::new_v4();
+        let s = MetadataStore::new(d.path().into());
+        for ts in [1, 61, 121, 181] {
+            s.append(
+                MetadataRecord::new(h, ts, "trace", json!({}), json!({})),
+                60,
+            )
+            .unwrap();
+        }
+        let path = s.dir(h).join("active.wal");
+        OpenOptions::new()
+            .append(true)
+            .open(path)
+            .unwrap()
+            .write_all(&[8, 0, 0])
+            .unwrap();
+        drop(s);
+        let s = MetadataStore::new(d.path().into());
+        assert_eq!(s.range(h, 0, 200).unwrap().len(), 4);
+        s.maintain(h, 150).unwrap();
+        assert_eq!(
+            s.range(h, 0, 200)
+                .unwrap()
+                .iter()
+                .map(|r| r.timestamp)
+                .collect::<Vec<_>>(),
+            vec![121, 181]
+        );
+    }
+}

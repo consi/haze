@@ -19,6 +19,7 @@ const STORE_LOCK_FILE: &str = "hzc.lock";
 
 pub struct HzcStore {
     data_dir: PathBuf,
+    metadata: Arc<crate::MetadataStore>,
     handles: DashMap<Uuid, Arc<HostWriter>>,
     /// Wall-clock source. Production uses `SystemClock`; tests can substitute
     /// a `ManualClock` to step the storage lifecycle through years of
@@ -52,6 +53,7 @@ impl HzcStore {
         lock.try_lock_exclusive()
             .map_err(|_| HzcError::LockHeld(lock_path))?;
         Ok(Self {
+            metadata: Arc::new(crate::MetadataStore::new(data_dir.clone())),
             data_dir,
             handles: DashMap::new(),
             clock,
@@ -64,6 +66,10 @@ impl HzcStore {
     /// integration tests can pin time.
     pub fn clock(&self) -> &Arc<dyn Clock> {
         &self.clock
+    }
+
+    pub fn metadata(&self) -> &Arc<crate::MetadataStore> {
+        &self.metadata
     }
 
     pub fn data_dir(&self) -> &Path {
@@ -105,6 +111,7 @@ impl HzcStore {
     /// Remove a host's data directory entirely. Use when deleting a host
     /// from the system.
     pub fn delete(&self, host_uuid: Uuid) -> Result<(), HzcError> {
+        self.metadata.delete(host_uuid);
         if let Some((_, h)) = self.handles.remove(&host_uuid) {
             let _ = h.flush();
         }

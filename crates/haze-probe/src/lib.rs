@@ -13,6 +13,7 @@ pub mod ping;
 pub mod scheduler;
 pub mod tcp_connect;
 pub mod tls_connect;
+pub mod traceroute;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -62,6 +63,8 @@ impl ProbeKind {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProbeError {
+    #[error("DNS resolution failed: {0}")]
+    Resolve(String),
     #[error("invalid probe config: {0}")]
     Config(String),
     #[error("probe runtime error: {0}")]
@@ -76,6 +79,9 @@ pub struct ProbeContext {
 
 #[async_trait]
 pub trait Probe: Send + Sync {
+    fn target_ip(&self) -> Option<std::net::IpAddr> {
+        None
+    }
     fn kind(&self) -> ProbeKind;
 
     /// One measurement attempt. `Ok(latency_ms)` on success; `Err` is a loss.

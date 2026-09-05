@@ -10,6 +10,8 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
 };
 
+pub mod metadata;
+pub use metadata::{MetadataPage, MetadataRecord, MetadataStore};
 pub mod aggregate;
 pub mod clock;
 pub mod hzc;

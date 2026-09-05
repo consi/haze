@@ -110,6 +110,7 @@ pub fn router() -> Router<AppState> {
         .route("/slots/{slot_uuid}", delete(delete_slot_route))
         .route("/slots/{slot_uuid}/manifest", get(slot_manifest))
         .route("/slots/{slot_uuid}/range", get(slot_range))
+        .route("/slots/{slot_uuid}/metadata", get(slot_metadata))
         .route("/slots/{slot_uuid}/ack", post(slot_ack))
         .route("/slots/{slot_uuid}/stream", get(slot_stream))
 }
@@ -164,6 +165,7 @@ fn with_total<T: Serialize>(body: T, total: i64) -> Response {
 
 #[derive(Serialize, ToSchema)]
 pub struct InstanceInfoResp {
+    pub capabilities: Vec<String>,
     pub instance_uuid: Uuid,
     pub version: String,
     /// Instance UUIDs we ourselves pull from. Returned so the caller can
@@ -199,6 +201,7 @@ pub async fn instance_info(
         }
     }
     Ok(Json(InstanceInfoResp {
+        capabilities: vec!["metadata_v1".into()],
         instance_uuid: state.instance_uuid,
         version: env!("CARGO_PKG_VERSION").to_string(),
         upstream_chain: chain,
@@ -1152,6 +1155,8 @@ pub struct ManifestGroup {
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ManifestResp {
+    #[serde(default)]
+    pub capabilities: Vec<String>,
     pub slot_uuid: Uuid,
     pub source_group_uuid: Uuid,
     pub groups: Vec<ManifestGroup>,
@@ -1269,6 +1274,7 @@ pub async fn slot_manifest(
         "replication manifest served"
     );
     Ok(Json(ManifestResp {
+        capabilities: vec!["metadata_v1".into()],
         slot_uuid,
         source_group_uuid: source_group,
         groups: manifest_groups,
@@ -1494,6 +1500,7 @@ pub async fn slot_stream(
     let host_filter = compute_host_filter(&state, slot.source_group_uuid).await?;
     let host_filter = std::sync::Arc::new(std::sync::RwLock::new(host_filter));
     let samples_rx = state.samples.subscribe();
+    let metadata_rx = state.hzc.metadata().subscribe();
     let events_rx = state.events.subscribe();
     let shutdown = state.shutdown.clone();
     let state_for_refresh = state.clone();
@@ -1503,6 +1510,7 @@ pub async fn slot_stream(
 
     let stream = futures::stream::unfold(
         StreamState {
+            metadata_rx,
             samples_rx,
             events_rx,
             shutdown,
@@ -1516,6 +1524,15 @@ pub async fn slot_stream(
                     tokio::select! {
                         biased;
                         () = s.shutdown.notified() => return None,
+                        metadata = s.metadata_rx.recv() => match metadata {
+                            Ok(record) => {
+                                if !s.host_filter.read().map(|set|set.contains(&record.host_uuid)).unwrap_or(false) {continue;}
+                                let event=Event::default().event("metadata").data(serde_json::to_string(&record).unwrap_or_default());
+                                return Some((Ok::<_, Infallible>(event),s));
+                            }
+                            Err(RecvError::Lagged(_)) => return Some((Ok::<_, Infallible>(Event::default().event("lagged").data("metadata")),s)),
+                            Err(RecvError::Closed) => return None,
+                        },
                         sample = s.samples_rx.recv() => match sample {
                             Ok(ev) => {
                                 let hit = s
@@ -1601,6 +1618,7 @@ pub async fn slot_stream(
 }
 
 struct StreamState {
+    metadata_rx: tokio::sync::broadcast::Receiver<haze_store::MetadataRecord>,
     samples_rx: tokio::sync::broadcast::Receiver<haze_store::SampleEvent>,
     events_rx: tokio::sync::broadcast::Receiver<ChangeKind>,
     shutdown: std::sync::Arc<tokio::sync::Notify>,
@@ -1739,4 +1757,39 @@ pub fn http_client_for_worker(skip_tls_verify: bool) -> reqwest::Client {
 #[allow(dead_code)]
 fn map_repo_err(e: ReplicationError) -> ApiError {
     e.into()
+}
+
+#[derive(Deserialize)]
+pub struct MetadataQuery {
+    pub host: Uuid,
+    #[serde(default)]
+    pub after: u64,
+    pub limit: Option<usize>,
+}
+#[utoipa::path(get,path="/api/v1/replication/slots/{slot_uuid}/metadata",params(("slot_uuid"=Uuid,Path),("host"=Uuid,Query),("after"=Option<u64>,Query),("limit"=Option<usize>,Query)),responses((status=200,body=haze_store::MetadataPage)),tag="replication")]
+pub async fn slot_metadata(
+    user: CurrentUser,
+    State(state): State<AppState>,
+    Path(slot_uuid): Path<Uuid>,
+    Query(q): Query<MetadataQuery>,
+) -> ApiResult<Json<haze_store::MetadataPage>> {
+    require_admin(&user)?;
+    let slot = replication::get_slot_by_uuid(&state.pool, slot_uuid)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    if slot.blocked_at.is_some()
+        || !compute_host_filter(&state, slot.source_group_uuid)
+            .await?
+            .contains(&q.host)
+    {
+        return Err(ApiError::Forbidden);
+    }
+    let metadata = state.hzc.metadata().clone();
+    let page = tokio::task::spawn_blocking(move || {
+        metadata.page(q.host, q.after, q.limit.unwrap_or(500).clamp(1, 1000))
+    })
+    .await
+    .map_err(|e| ApiError::Internal(e.to_string()))?
+    .map_err(|e| ApiError::Internal(e.to_string()))?;
+    Ok(Json(page))
 }

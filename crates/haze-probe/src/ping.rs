@@ -124,7 +124,7 @@ async fn resolve(target: &str, prefer_ipv6: bool) -> Result<IpAddr, ProbeError> 
     // Append :0 so we can pass to lookup_host which expects host:port.
     let lookup = tokio::net::lookup_host(format!("{target}:0"))
         .await
-        .map_err(|e| ProbeError::Runtime(format!("dns lookup '{target}': {e}")))?;
+        .map_err(|e| ProbeError::Resolve(format!("dns lookup '{target}': {e}")))?;
     let mut v4 = None;
     let mut v6 = None;
     for sa in lookup {
@@ -135,11 +135,14 @@ async fn resolve(target: &str, prefer_ipv6: bool) -> Result<IpAddr, ProbeError> 
         }
     }
     let chosen = if prefer_ipv6 { v6.or(v4) } else { v4.or(v6) };
-    chosen.ok_or_else(|| ProbeError::Runtime(format!("no addresses for '{target}'")))
+    chosen.ok_or_else(|| ProbeError::Resolve(format!("no addresses for '{target}'")))
 }
 
 #[async_trait]
 impl Probe for PingProbe {
+    fn target_ip(&self) -> Option<IpAddr> {
+        Some(self.target_ip)
+    }
     fn kind(&self) -> ProbeKind {
         ProbeKind::Ping
     }

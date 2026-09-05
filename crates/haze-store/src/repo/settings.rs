@@ -87,6 +87,17 @@ pub const DEFAULT_HOST_CHUNK_WINDOW_SECS: u32 = 3600;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, utoipa::ToSchema)]
 pub struct WorkerPools {
     pub probe_ping: u32,
+    #[serde(default = "default_trace_workers")]
+    pub probe_traceroute: u32,
+    #[serde(default = "default_trace_every_entries")]
+    pub trace_every_entries: u32,
+    #[serde(default = "default_trace_queue_timeout_secs")]
+    pub trace_queue_timeout_secs: u32,
+    #[serde(default = "default_trace_timeout_secs")]
+    pub trace_timeout_secs: u32,
+    #[serde(default = "default_trace_reply_timeout_ms")]
+    pub trace_reply_timeout_ms: u32,
+
     pub probe_dns: u32,
     pub probe_tcp_connect: u32,
     pub probe_tls_connect: u32,
@@ -105,6 +116,12 @@ pub struct WorkerPools {
 pub fn default_worker_pools() -> WorkerPools {
     WorkerPools {
         probe_ping: 4096,
+        probe_traceroute: default_trace_workers(),
+        trace_every_entries: default_trace_every_entries(),
+        trace_queue_timeout_secs: default_trace_queue_timeout_secs(),
+        trace_timeout_secs: default_trace_timeout_secs(),
+        trace_reply_timeout_ms: default_trace_reply_timeout_ms(),
+
         probe_dns: 1024,
         probe_tcp_connect: 1024,
         probe_tls_connect: 512,
@@ -114,6 +131,26 @@ pub fn default_worker_pools() -> WorkerPools {
         alert_eval: 32,
         replication: default_replication_workers(),
     }
+}
+
+fn default_trace_every_entries() -> u32 {
+    30
+}
+
+fn default_trace_queue_timeout_secs() -> u32 {
+    300
+}
+
+fn default_trace_timeout_secs() -> u32 {
+    60
+}
+
+fn default_trace_reply_timeout_ms() -> u32 {
+    2000
+}
+
+fn default_trace_workers() -> u32 {
+    8
 }
 
 fn default_replication_workers() -> u32 {
@@ -476,4 +513,31 @@ pub async fn instance_uuid(pool: &SqlitePool) -> Result<Uuid, SettingsError> {
     let json = serde_json::to_string(&fresh.to_string())?;
     set_raw(pool, KEY_INSTANCE_UUID, &json, None).await?;
     Ok(fresh)
+}
+
+#[cfg(test)]
+mod trace_settings_tests {
+    use super::*;
+    #[test]
+    fn old_worker_settings_keep_custom_limits_and_gain_trace_defaults() {
+        let mut old = serde_json::to_value(default_worker_pools()).unwrap();
+        let obj = old.as_object_mut().unwrap();
+        for key in [
+            "probe_traceroute",
+            "trace_every_entries",
+            "trace_queue_timeout_secs",
+            "trace_timeout_secs",
+            "trace_reply_timeout_ms",
+        ] {
+            obj.remove(key);
+        }
+        obj.insert("probe_ping".into(), 123.into());
+        let restored: WorkerPools = serde_json::from_value(old).unwrap();
+        assert_eq!(restored.probe_ping, 123);
+        assert_eq!(restored.probe_traceroute, 8);
+        assert_eq!(restored.trace_every_entries, 30);
+        assert_eq!(restored.trace_queue_timeout_secs, 300);
+        assert_eq!(restored.trace_timeout_secs, 60);
+        assert_eq!(restored.trace_reply_timeout_ms, 2000);
+    }
 }

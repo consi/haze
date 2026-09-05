@@ -90,6 +90,57 @@ pub async fn run(cfg: Config) -> Result<()> {
     let pool = haze_store::open_pool(&cfg.data_dir).await?;
     let hzc = Arc::new(HzcStore::new(&cfg.data_dir).context("opening hzc store")?);
 
+    // Metadata checkpoints are coalesced off the probe hot path.
+    {
+        let metadata = hzc.metadata().clone();
+        let metadata_pool = pool.clone();
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(30));
+            let mut passes = 0u32;
+            loop {
+                tick.tick().await;
+                passes += 1;
+                let m = metadata.clone();
+                if let Err(e) = tokio::task::spawn_blocking(move || m.flush_background())
+                    .await
+                    .unwrap_or_else(|e| Err(e.into()))
+                {
+                    tracing::warn!(error=%e,"metadata flush failed");
+                }
+                if passes.is_multiple_of(120) {
+                    let horizon = settings::retention_tiers(&metadata_pool)
+                        .await
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|t| t.max_age_secs)
+                        .max();
+                    if let Some(horizon) = horizon
+                        && let Ok(hosts) = haze_store::repo::hosts::list(
+                            &metadata_pool,
+                            haze_store::repo::hosts::GroupFilter::Any,
+                            None,
+                        )
+                        .await
+                    {
+                        for host in hosts {
+                            let m = metadata.clone();
+                            let id = host.uuid_typed();
+                            let cutoff = chrono::Utc::now().timestamp() - horizon;
+                            if let Err(e) =
+                                tokio::task::spawn_blocking(move || m.maintain(id, cutoff))
+                                    .await
+                                    .unwrap_or_else(|e| Err(e.into()))
+                            {
+                                tracing::warn!(%id,error=%e,"metadata maintenance failed");
+                            }
+                            tokio::time::sleep(Duration::from_millis(10)).await;
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Empty install: provision an admin account so the operator can sign
     // in. The plaintext is printed exactly once - they're expected to copy
     // it from the log and then either keep it or rotate it via /settings.
@@ -566,6 +617,8 @@ pub async fn run(cfg: Config) -> Result<()> {
         .unwrap_or_else(|_| haze_store::default_public_mode_settings());
     let limiters = haze_api::new_handle(&public_settings);
     let sse_per_ip = haze_api::new_sse_map();
+    let metadata_at_shutdown = hzc.metadata().clone();
+    let scheduler_at_shutdown = scheduler_handle.clone();
     let app = build_app(
         haze_api::AppState {
             pool,
@@ -601,7 +654,10 @@ pub async fn run(cfg: Config) -> Result<()> {
     )
     .with_graceful_shutdown(shutdown_signal(shutdown))
     .await
-    .context("axum serve failed")
+    .context("axum serve failed")?;
+    scheduler_at_shutdown.shutdown();
+    tokio::task::spawn_blocking(move || metadata_at_shutdown.flush_all()).await??;
+    Ok(())
 }
 
 fn build_app(state: haze_api::AppState, base: &str) -> axum::Router {

@@ -148,8 +148,35 @@ pub(crate) async fn update_workers(
 const MAX_TOTAL_POOL_BUDGET: u64 = 32_768;
 
 fn validate_pools(p: &WorkerPools) -> ApiResult<()> {
+    if !(1..=10000).contains(&p.trace_every_entries) {
+        return Err(ApiError::Validation(
+            "trace_every_entries must be between 1 and 10000".into(),
+        ));
+    }
+    if !(1..=3600).contains(&p.trace_queue_timeout_secs) {
+        return Err(ApiError::Validation(
+            "trace_queue_timeout_secs must be between 1 and 3600".into(),
+        ));
+    }
+    if !(1..=300).contains(&p.trace_timeout_secs) {
+        return Err(ApiError::Validation(
+            "trace_timeout_secs must be between 1 and 300".into(),
+        ));
+    }
+    if !(1..=10000).contains(&p.trace_reply_timeout_ms) {
+        return Err(ApiError::Validation(
+            "trace_reply_timeout_ms must be between 1 and 10000".into(),
+        ));
+    }
+
+    if p.probe_traceroute > 64 {
+        return Err(ApiError::Validation(
+            "probe_traceroute must be <= 64".into(),
+        ));
+    }
     let fields = [
         ("probe_ping", p.probe_ping),
+        ("probe_traceroute", p.probe_traceroute),
         ("probe_dns", p.probe_dns),
         ("probe_tcp_connect", p.probe_tcp_connect),
         ("probe_tls_connect", p.probe_tls_connect),
@@ -455,4 +482,23 @@ fn validate(req: &UpdateStorageSettingsReq) -> ApiResult<()> {
         prev_res = tier.resolution_secs;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod trace_validation_tests {
+    use super::*;
+    #[test]
+    fn trace_settings_are_bounded_separately_from_worker_budget() {
+        let mut p = settings::default_worker_pools();
+        assert!(validate_pools(&p).is_ok());
+        p.trace_every_entries = 0;
+        assert!(validate_pools(&p).is_err());
+        p.trace_every_entries = 10_000;
+        p.trace_queue_timeout_secs = 3600;
+        p.trace_timeout_secs = 300;
+        p.trace_reply_timeout_ms = 10_000;
+        assert!(validate_pools(&p).is_ok());
+        p.trace_reply_timeout_ms = 10_001;
+        assert!(validate_pools(&p).is_err());
+    }
 }

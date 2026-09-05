@@ -4,6 +4,7 @@
   import { untrack } from 'svelte';
   import { type Host, type SeriesResp } from '$lib/api';
   import { cancelInflight, isAbortError, loadSeries, samplesForWidth } from '$lib/series';
+  import RouteHistoryButton from './RouteHistoryButton.svelte';
   import SmokeChart from './SmokeChart.svelte';
   import GraphLoadingSpinner from './GraphLoadingSpinner.svelte';
 
@@ -154,7 +155,8 @@
       {host.probe_type}
     </span>
     <span>·</span>
-    <span>every {host.interval_secs}s × {host.samples_per_period} samples</span>
+    <span class="truncate">every {host.interval_secs}s × {host.samples_per_period} samples</span>
+    <RouteHistoryButton {host} {fromSecs} {toSecs}/>
   </header>
 
   <!-- Locked height. The pin matters because SmokeChart only mounts when

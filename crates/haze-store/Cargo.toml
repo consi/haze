@@ -26,6 +26,8 @@ dashmap = { workspace = true }
 utoipa = { workspace = true }
 zstd = { workspace = true }
 
+sha2 = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 proptest = { workspace = true }

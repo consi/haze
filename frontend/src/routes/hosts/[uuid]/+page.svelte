@@ -3,6 +3,7 @@
   import { untrack } from 'svelte';
   import { api, type Host, type SeriesResp, type StorageSettings } from '$lib/api';
   import { isAbortError, loadSeries, samplesForWidth } from '$lib/series';
+  import RouteHistoryButton from '$lib/components/RouteHistoryButton.svelte';
   import SmokeChart from '$lib/components/SmokeChart.svelte';
   import GraphLoadingSpinner from '$lib/components/GraphLoadingSpinner.svelte';
   import { fmt, partsInZone } from '$lib/timezone.svelte';
@@ -408,6 +409,7 @@
       class="relative border rounded p-1 md:p-2 mt-2 min-h-[276px]"
       style="border-color: var(--border)"
     >
+      <div class="flex justify-end mb-1"><RouteHistoryButton {host} {fromSecs} {toSecs}/></div>
       {#if series}
         <!-- Pin the chart's x-axis to the requested window so zoom-out past
              the available data still draws the full window with empty space

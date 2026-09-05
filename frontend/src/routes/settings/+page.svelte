@@ -646,6 +646,7 @@
   let workersSaveOk = $state(false);
 
   const POOL_FIELDS: { key: keyof WorkerPools; label: string; hint: string }[] = [
+    { key: 'probe_traceroute', label: 'ICMP traceroutes', hint: 'Concurrent route captures. Starts at 8; raise if history reports collection gaps.' },
     { key: 'probe_ping',        label: 'PING probes',        hint: 'In-flight ICMP echoes. Cheap; raise this first.' },
     { key: 'probe_dns',         label: 'DNS probes',         hint: 'In-flight DNS queries.' },
     { key: 'probe_tcp_connect', label: 'TCP CONNECT probes', hint: 'In-flight TCP handshakes.' },
@@ -659,6 +660,12 @@
 
   const DEFAULT_WORKER_POOLS: WorkerPools = {
     probe_ping: 4096,
+    probe_traceroute: 8,
+    trace_every_entries: 30,
+    trace_queue_timeout_secs: 300,
+    trace_timeout_secs: 60,
+    trace_reply_timeout_ms: 2000,
+
     probe_dns: 1024,
     probe_tcp_connect: 1024,
     probe_tls_connect: 512,
@@ -672,6 +679,12 @@
   // Server caps. Mirror `MAX_TOTAL_POOL_BUDGET` and per-field cap in
   // settings_routes.rs so the UI shows the limit error inline instead of
   // round-tripping a 422.
+  const TRACE_FIELDS: { key: keyof WorkerPools; label: string; hint: string; max: number }[] = [
+    {key: 'trace_every_entries', label: 'Average entries per trace', hint: 'Randomized ±⅓ each capture; first capture is spread over a full cycle.', max: 10000},
+    {key: 'trace_queue_timeout_secs', label: 'Queue timeout (seconds)', hint: 'Maximum wait for an available trace worker.', max: 3600},
+    {key: 'trace_timeout_secs', label: 'Trace timeout (seconds)', hint: 'Total network deadline per route capture.', max: 300},
+    {key: 'trace_reply_timeout_ms', label: 'Hop reply timeout (ms)', hint: 'Time to wait for each ICMP reply.', max: 10000}
+  ];
   const PER_POOL_MAX = 16_384;
   const TOTAL_POOL_BUDGET = 32_768;
 
@@ -682,9 +695,14 @@
   );
 
   const workersError = $derived.by(() => {
+    for (const f of TRACE_FIELDS) {
+      const v = Number(pools[f.key]);
+      if (!Number.isInteger(v) || v < 1 || v > f.max) return `${f.label}: enter an integer from 1 to ${f.max}`;
+    }
+    if (pools.probe_traceroute > 64) return 'ICMP traceroutes: maximum 64';
     for (const f of POOL_FIELDS) {
       const v = Number(pools[f.key]);
-      if (!Number.isFinite(v) || v <= 0) return `${f.label}: must be a positive integer`;
+      if (!Number.isInteger(v) || v <= 0) return `${f.label}: must be a positive integer`;
       if (v > PER_POOL_MAX) return `${f.label}: max ${PER_POOL_MAX} per pool`;
     }
     if (poolsTotal > TOTAL_POOL_BUDGET) {
@@ -1633,12 +1651,19 @@
             <div class="overflow-x-auto"><table class="w-full text-xs mono">
               <thead style="color: var(--muted)">
                 <tr class="text-left">
-                  <th class="py-1 px-2 font-normal">Pool</th>
-                  <th class="py-1 px-2 font-normal w-32">Concurrent limit</th>
+                  <th class="py-1 px-2 font-normal">Setting / pool</th>
+                  <th class="py-1 px-2 font-normal w-32">Value</th>
                   <th class="py-1 px-2 font-normal">Description</th>
                 </tr>
               </thead>
               <tbody>
+                {#each TRACE_FIELDS as f (f.key)}
+                  <tr class="border-t" style="border-color: var(--border)">
+                    <td class="py-1 px-2">{f.label}</td>
+                    <td class="py-1 px-2"><input type="number" min="1" max={f.max} step="1" bind:value={pools[f.key]} class="w-full px-2 py-0.5 rounded border mono" style="background: var(--bg); border-color: var(--border); color: var(--fg)" /></td>
+                    <td class="py-1 px-2 text-[11px]" style="color: var(--muted)">{f.hint}</td>
+                  </tr>
+                {/each}
                 {#each POOL_FIELDS as f (f.key)}
                   <tr class="border-t" style="border-color: var(--border)">
                     <td class="py-1 px-2">{f.label}</td>

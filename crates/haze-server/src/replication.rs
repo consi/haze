@@ -731,10 +731,30 @@ async fn catch_up(
 
     let _ = events.send(haze_api::events_routes::ChangeKind::Tree);
 
+    let metadata_supported = m.capabilities.iter().any(|c| c == "metadata_v1");
     // Range-fetch each host from its cursor to "now" in batches.
     for h in &m.hosts {
         if cancel_pending(cancel) {
             return Ok(());
+        }
+        if h.probe_type == "ping" {
+            let support = if metadata_supported {
+                "supported"
+            } else {
+                "unsupported"
+            };
+            hzc.metadata().checkpoint(
+                h.uuid,
+                "replication-support",
+                &serde_json::json!(support),
+            )?;
+            if metadata_supported {
+                if let Err(e) =
+                    backfill_metadata(hzc, rule, peer, slot_uuid, h, client, cancel).await
+                {
+                    tracing::warn!(host=%h.uuid,error=%e,"metadata backfill failed; will retry");
+                }
+            }
         }
         if let Err(e) = backfill_host(
             pool,
@@ -1268,6 +1288,23 @@ async fn handle_sse_event(
             Ok(false)
         }
         "manifest-changed" => Ok(false),
+        "metadata" => {
+            let record: haze_store::MetadataRecord = serde_json::from_str(&ev.data)?;
+            let Some(host) = hosts::get_by_uuid(pool, record.host_uuid).await? else {
+                return Ok(false);
+            };
+            // Live traffic never advances catch-up checkpoints. Periodic range
+            // pulls repair the subscribe/backfill race and any missed events.
+            if host.replication_peer_id != Some(peer.id) {
+                return Ok(true);
+            }
+            let metadata = hzc.metadata().clone();
+            tokio::task::spawn_blocking(move || {
+                metadata.append(record, host.chunk_window_secs as u32)
+            })
+            .await??;
+            Ok(true)
+        }
         "sample" => {
             // Body shape mirrors what the source-side handler writes.
             #[derive(serde::Deserialize)]
@@ -1524,5 +1561,68 @@ async fn acquire_pool_permit_inner(
         Ok(permit)
     } else {
         Ok(sem.acquire_owned().await?)
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn backfill_metadata(
+    hzc: &Arc<HzcStore>,
+    rule: &replication::ReplicationRule,
+    peer: &replication::ReplicationPeer,
+    slot_uuid: Uuid,
+    host: &wire::ManifestHost,
+    client: &reqwest::Client,
+    cancel: &Notify,
+) -> Result<()> {
+    let key = format!("replication-{}", rule.uuid.simple());
+    let mut after = hzc
+        .metadata()
+        .read_checkpoint(host.uuid, &key)?
+        .as_u64()
+        .unwrap_or(0);
+    loop {
+        if cancel_pending(cancel) {
+            return Ok(());
+        }
+        let response = client
+            .get(format!(
+                "{}/api/v1/replication/slots/{slot_uuid}/metadata",
+                peer.base_url
+            ))
+            .bearer_auth(&peer.api_token)
+            .query(&[
+                ("host", host.uuid.to_string()),
+                ("after", after.to_string()),
+                ("limit", "500".into()),
+            ])
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await?
+            .error_for_status()?;
+        let page: haze_store::MetadataPage = response.json().await?;
+        if page.records.is_empty() {
+            return Ok(());
+        }
+        let next = page.records.last().map_or(after, |r| r.sequence);
+        anyhow::ensure!(next > after, "metadata cursor did not advance");
+        let metadata = hzc.metadata().clone();
+        let id = host.uuid;
+        let window = host.chunk_window_secs as u32;
+        let checkpoint = key.clone();
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            for record in page.records {
+                anyhow::ensure!(record.host_uuid == id, "metadata host mismatch");
+                metadata.append(record, window)?;
+            }
+            metadata.flush(id)?;
+            metadata.checkpoint(id, &checkpoint, &serde_json::json!(next))?;
+            metadata.flush(id)?;
+            Ok(())
+        })
+        .await??;
+        after = next;
+        if page.next.is_none() {
+            return Ok(());
+        }
     }
 }

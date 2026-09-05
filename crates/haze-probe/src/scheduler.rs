@@ -116,6 +116,8 @@ pub struct Scheduler {
     /// hosts; collisions across long-lived hosts are harmless since
     /// surge-ping demuxes by `(addr, ident, seq)`.
     next_ping_id: Arc<AtomicU16>,
+    trace_pool: Arc<Semaphore>,
+    trace_settings: haze_store::WorkerPools,
     /// Shared hickory resolvers, keyed by upstream. Each resolver owns a UDP
     /// socket + recv loop, so sharing avoids one-per-host fan-out.
     dns_resolvers: Arc<DnsResolvers>,
@@ -158,6 +160,8 @@ impl Scheduler {
             ping_clients: Arc::new(PingClients::new()),
             // Start at 1 - 0 is a valid identifier but conventionally avoided.
             next_ping_id: Arc::new(AtomicU16::new(1)),
+            trace_settings: worker_pools.clone(),
+            trace_pool: Arc::new(Semaphore::new(worker_pools.probe_traceroute.max(1) as usize)),
             dns_resolvers: Arc::new(DnsResolvers::new()),
             http_clients: Arc::new(HttpClients::new()),
         }
@@ -219,6 +223,8 @@ impl Scheduler {
         let dns_resolvers = self.dns_resolvers.clone();
         let http_clients = self.http_clients.clone();
         let samples_tx = self.samples_tx.clone();
+        let trace_pool = self.trace_pool.clone();
+        let trace_settings = self.trace_settings.clone();
         let id = spec.uuid;
         let handle = tokio::spawn(async move {
             if let Err(e) = host_loop(
@@ -231,10 +237,19 @@ impl Scheduler {
                 dns_resolvers,
                 http_clients,
                 samples_tx,
+                trace_pool,
+                trace_settings,
             )
             .await
             {
-                error!(uuid = %id, error = ?e, "host probe loop exited");
+                if matches!(
+                    e.downcast_ref::<crate::ProbeError>(),
+                    Some(crate::ProbeError::Resolve(_))
+                ) {
+                    debug!(uuid = %id, error = ?e, "host resolution failed");
+                } else {
+                    error!(uuid = %id, error = ?e, "host probe loop exited");
+                }
             }
             handles.remove(&id);
         });
@@ -338,6 +353,12 @@ struct BootstrapRow {
     chunk_window_secs: i64,
 }
 
+fn randomized_trace_interval(cadence: u32) -> u64 {
+    let cadence = u64::from(cadence.clamp(1, 10_000));
+    let spread = cadence / 3;
+    rand::random_range(cadence - spread..=cadence + spread)
+}
+
 fn parse_kind(s: &str) -> Result<ProbeKind> {
     Ok(match s {
         "ping" => ProbeKind::Ping,
@@ -379,6 +400,8 @@ async fn host_loop(
     dns_resolvers: Arc<DnsResolvers>,
     http_clients: Arc<HttpClients>,
     samples_tx: Option<broadcast::Sender<SampleEvent>>,
+    trace_pool: Arc<Semaphore>,
+    trace_settings: haze_store::WorkerPools,
 ) -> Result<()> {
     let HostSpec {
         uuid,
@@ -426,6 +449,41 @@ async fn host_loop(
     let period = Duration::from_secs(u64::from(interval_secs));
     let attempt_timeout = period.mul_f32(0.75) / samples_per_period.max(1);
 
+    let metadata = store.metadata().clone();
+    let checkpoint = metadata
+        .read_checkpoint(uuid, "schedule")
+        .unwrap_or_default();
+    let same_target = checkpoint.get("config") == Some(&probe_config);
+    let cadence = trace_settings.trace_every_entries.clamp(1, 10_000);
+    // Persist the remaining delay. Older checkpoints and cadence changes get
+    // a fresh initial phase across the full capture cycle.
+    let mut trace_remaining = if same_target
+        && checkpoint
+            .get("cadence")
+            .and_then(serde_json::Value::as_u64)
+            == Some(u64::from(cadence))
+    {
+        checkpoint
+            .get("remaining")
+            .and_then(serde_json::Value::as_u64)
+            .filter(|n| *n > 0 && *n <= u64::from(cadence) * 2)
+            .unwrap_or_else(|| rand::random_range(1..=u64::from(cadence)))
+    } else {
+        rand::random_range(1..=u64::from(cadence))
+    };
+    if !same_target && probe_type == ProbeKind::Ping {
+        metadata.checkpoint(uuid, "trace-state", &serde_json::Value::Null)?;
+    }
+    let mut previous_loss = if same_target {
+        checkpoint
+            .get("loss")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0)
+    } else {
+        0.0
+    };
+    // Dropping this guard cancels the child when a host is restarted/deleted.
+    let mut trace_task = TraceTask(None);
     let mut tick = interval(period);
     tick.tick().await;
 
@@ -470,6 +528,154 @@ async fn host_loop(
             Err(e) => warn!(uuid = %uuid, error = %e, "store.writer() failed; skipping period"),
         }
 
+        if probe_type == ProbeKind::Ping {
+            trace_remaining = trace_remaining.saturating_sub(1);
+            let loss = f64::from(slot.loss_pct);
+            if loss.is_finite() && loss != previous_loss {
+                let event = if loss == 0.0 {
+                    "loss_recovered"
+                } else if previous_loss == 0.0 {
+                    "loss_started"
+                } else {
+                    "loss_changed"
+                };
+                let record = haze_store::MetadataRecord::new(
+                    uuid,
+                    ts,
+                    "loss",
+                    serde_json::Value::Null,
+                    serde_json::json!({"event":event,"loss_pct":loss,"previous_loss_pct":previous_loss}),
+                );
+                let m = metadata.clone();
+                if let Err(e) =
+                    tokio::task::spawn_blocking(move || m.append_local(record, chunk_window_secs))
+                        .await
+                        .unwrap_or_else(|e| Err(e.into()))
+                {
+                    warn!(%uuid,error=%e,"loss metadata write failed");
+                }
+                previous_loss = loss;
+            }
+            if trace_remaining == 0 {
+                trace_remaining = randomized_trace_interval(cadence);
+                if trace_task
+                    .0
+                    .as_ref()
+                    .is_none_or(tokio::task::JoinHandle::is_finished)
+                {
+                    if let Some(target) = probe.target_ip() {
+                        let m = metadata.clone();
+                        let dns = dns_resolvers.clone();
+                        let pool = trace_pool.clone();
+                        let trace_settings = trace_settings.clone();
+                        trace_task.0 = Some(tokio::spawn(async move {
+                            // Queue at most one capture per host. Bounded waiting absorbs
+                            // bursts without allowing stale traces to pile up indefinitely.
+                            match tokio::time::timeout(
+                                Duration::from_secs(u64::from(
+                                    trace_settings.trace_queue_timeout_secs.clamp(1, 3600),
+                                )),
+                                pool.acquire_owned(),
+                            )
+                            .await
+                            {
+                                Ok(Ok(_permit)) => {
+                                    if let Err(e) = crate::traceroute::collect(
+                                        uuid,
+                                        target,
+                                        dns,
+                                        m,
+                                        chunk_window_secs,
+                                        Duration::from_secs(u64::from(
+                                            trace_settings.trace_timeout_secs.clamp(1, 300),
+                                        )),
+                                        Duration::from_millis(u64::from(
+                                            trace_settings.trace_reply_timeout_ms.clamp(1, 10_000),
+                                        )),
+                                    )
+                                    .await
+                                    {
+                                        warn!(%uuid,error=%e,"traceroute failed");
+                                    }
+                                }
+                                _ => {
+                                    record_trace_gap(
+                                        m,
+                                        uuid,
+                                        ts,
+                                        chunk_window_secs,
+                                        "Trace worker queue deadline exceeded",
+                                    )
+                                    .await;
+                                }
+                            }
+                        }));
+                    }
+                } else {
+                    record_trace_gap(
+                        metadata.clone(),
+                        uuid,
+                        ts,
+                        chunk_window_secs,
+                        "Previous trace still pending",
+                    )
+                    .await;
+                }
+            }
+            let m = metadata.clone();
+            let state = serde_json::json!({"config":probe_config,"cadence":cadence,"remaining":trace_remaining,"loss":previous_loss});
+            if let Err(e) =
+                tokio::task::spawn_blocking(move || m.checkpoint(uuid, "schedule", &state))
+                    .await
+                    .unwrap_or_else(|e| Err(e.into()))
+            {
+                warn!(%uuid,error=%e,"trace cadence checkpoint failed");
+            }
+        }
         tick.tick().await;
+    }
+}
+
+struct TraceTask(Option<JoinHandle<()>>);
+impl Drop for TraceTask {
+    fn drop(&mut self) {
+        if let Some(task) = self.0.take() {
+            task.abort();
+        }
+    }
+}
+
+async fn record_trace_gap(
+    metadata: Arc<haze_store::MetadataStore>,
+    host: Uuid,
+    ts: i64,
+    window: u32,
+    reason: &str,
+) {
+    let record = haze_store::MetadataRecord::new(
+        host,
+        ts,
+        "trace",
+        serde_json::Value::Null,
+        serde_json::json!({"event":"collection_gap","error":reason}),
+    );
+    if let Err(e) = tokio::task::spawn_blocking(move || metadata.append_local(record, window))
+        .await
+        .unwrap_or_else(|e| Err(e.into()))
+    {
+        warn!(%host,error=%e,"trace gap write failed");
+    }
+}
+
+#[cfg(test)]
+mod trace_cadence_tests {
+    use super::*;
+    #[test]
+    fn randomized_cadence_is_bounded_and_spreads_captures() {
+        let intervals: Vec<_> = (0..1000).map(|_| randomized_trace_interval(30)).collect();
+        assert!(intervals.iter().all(|n| (20..=40).contains(n)));
+        assert!(intervals.iter().any(|n| *n != intervals[0]));
+        assert_eq!(randomized_trace_interval(1), 1);
+        assert_eq!(randomized_trace_interval(0), 1);
     }
 }

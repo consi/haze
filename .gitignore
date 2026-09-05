@@ -37,3 +37,7 @@ core.*
 Thumbs.db
 /.cargo-docker/
 /.cargo-cache/
+
+# Python verification tools
+__pycache__/
+*.pyc

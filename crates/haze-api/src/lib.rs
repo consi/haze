@@ -17,6 +17,7 @@ mod error;
 pub mod events_routes;
 mod groups_routes;
 mod hosts_routes;
+mod metadata_routes;
 mod middleware;
 mod passkey_routes;
 pub mod rate_limit;
@@ -163,6 +164,9 @@ impl Modify for SecurityAddon {
         hosts_routes::update,
         hosts_routes::delete,
         hosts_routes::series,
+        replication_routes::slot_metadata,
+        metadata_routes::history,
+        metadata_routes::detail,
         tree_routes::tree,
         settings_routes::get_storage,
         settings_routes::update_storage,
@@ -333,6 +337,8 @@ const PUBLIC_MODE_ANONYMOUS: &[(&str, &str)] = &[
     ("/api/v1/hosts", "get"),
     ("/api/v1/hosts/{uuid}", "get"),
     ("/api/v1/hosts/{uuid}/series", "get"),
+    ("/api/v1/hosts/{uuid}/route-history", "get"),
+    ("/api/v1/hosts/{uuid}/route-history/{id}", "get"),
     ("/api/v1/settings/storage", "get"),
     ("/api/v1/alerts/rules", "get"),
     ("/api/v1/alerts/rules/{uuid}", "get"),

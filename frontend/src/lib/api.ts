@@ -66,6 +66,12 @@ export interface StorageSettings {
 /** Per-area concurrency caps. Read/written through `/api/v1/settings/workers`. */
 export interface WorkerPools {
   probe_ping: number;
+  probe_traceroute: number;
+  trace_every_entries: number;
+  trace_queue_timeout_secs: number;
+  trace_timeout_secs: number;
+  trace_reply_timeout_ms: number;
+
   probe_dns: number;
   probe_tcp_connect: number;
   probe_tls_connect: number;
@@ -323,7 +329,20 @@ export class ApiError extends Error {
   }
 }
 
+export interface RouteRecord {
+  id:string;host_uuid:string;timestamp:number;kind:string;version:number;sequence:number;
+  context:{target:string;hops:{ip:string;dns:string|null}[][]}|null;
+  data:{event?:string;started?:number;finished?:number;previous_observed?:number;reached?:boolean;error?:string;loss_pct?:number;previous_loss_pct?:number;hops?:{sent:number;received:number;loss_pct:number;avg_ms:number|null}[]};
+}
+export interface RouteHistory {records:RouteRecord[];next:string|null;newer:string|null;total:number;support:string;timeline:{timestamp:number;traces:number;changes:number;gaps:number;loss_pct:number}[]}
+export interface RouteDetail {selected:RouteRecord;trace:RouteRecord|null;previous:RouteRecord|null}
 export const api = {
+  routeHistory(uuid:string,from:number,to:number,all:boolean,before?:string|null,signal?:AbortSignal,at?:number,newer=false):Promise<RouteHistory>{
+    const q=new URLSearchParams({from:String(from),to:String(to),all:String(all)});if(before)q.set('before',before);if(at!==undefined)q.set('at',String(Math.floor(at)));if(newer)q.set('newer','true');
+    return req('GET',`/hosts/${uuid}/route-history?${q}`,undefined,{signal});
+  },
+  routeDetail(uuid:string,id:string,signal?:AbortSignal):Promise<RouteDetail>{return req('GET',`/hosts/${uuid}/route-history/${id}`,undefined,{signal});},
+
   // Auth
   login(username: string, password: string): Promise<User> {
     return req('POST', '/auth/login', { username, password });

@@ -1,0 +1,180 @@
+{
+  "checked_at": "2026-09-06T09:03:11Z",
+  "actions": {
+    "EmbarkStudios/cargo-deny-action": {
+      "version": "v2.1.1",
+      "revision": "3c6349835b2b7b196a839186cb8b78e02f7b5f25",
+      "published": "2026-07-13T10:35:23Z",
+      "source": "https://github.com/EmbarkStudios/cargo-deny-action/releases/tag/v2.1.1"
+    },
+    "Swatinem/rust-cache": {
+      "version": "v2.9.2",
+      "revision": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
+      "published": "2026-08-06T06:26:27Z",
+      "source": "https://github.com/Swatinem/rust-cache/releases/tag/v2.9.2"
+    },
+    "actions/checkout": {
+      "version": "v7.0.1",
+      "revision": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "published": "2026-07-20T15:10:05Z",
+      "source": "https://github.com/actions/checkout/releases/tag/v7.0.1"
+    },
+    "actions/download-artifact": {
+      "version": "v8.0.1",
+      "revision": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+      "published": "2026-03-11T15:44:25Z",
+      "source": "https://github.com/actions/download-artifact/releases/tag/v8.0.1"
+    },
+    "actions/setup-node": {
+      "version": "v7.0.0",
+      "revision": "820762786026740c76f36085b0efc47a31fe5020",
+      "published": "2026-07-14T02:46:05Z",
+      "source": "https://github.com/actions/setup-node/releases/tag/v7.0.0"
+    },
+    "actions/upload-artifact": {
+      "version": "v7.0.1",
+      "revision": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+      "published": "2026-04-10T17:31:14Z",
+      "source": "https://github.com/actions/upload-artifact/releases/tag/v7.0.1"
+    },
+    "docker/build-push-action": {
+      "version": "v7.3.0",
+      "revision": "53b7df96c91f9c12dcc8a07bcb9ccacbed38856a",
+      "published": "2026-07-01T14:24:45Z",
+      "source": "https://github.com/docker/build-push-action/releases/tag/v7.3.0"
+    },
+    "docker/login-action": {
+      "version": "v4.6.0",
+      "revision": "dbcb813823bdd20940b903addbd779551569679f",
+      "published": "2026-07-29T12:12:00Z",
+      "source": "https://github.com/docker/login-action/releases/tag/v4.6.0"
+    },
+    "docker/setup-buildx-action": {
+      "version": "v4.3.0",
+      "revision": "37fe631027851001ddb9b187196cc803df7f5f0e",
+      "published": "2026-08-19T09:41:47Z",
+      "source": "https://github.com/docker/setup-buildx-action/releases/tag/v4.3.0"
+    },
+    "docker/setup-qemu-action": {
+      "version": "v4.2.0",
+      "revision": "96fe6ef7f33517b61c61be40b68a1882f3264fb8",
+      "published": "2026-07-01T12:04:56Z",
+      "source": "https://github.com/docker/setup-qemu-action/releases/tag/v4.2.0"
+    },
+    "dtolnay/rust-toolchain": {
+      "version": "master at cutoff",
+      "revision": "6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772",
+      "published": "2026-08-05T04:30:51Z",
+      "source": "https://github.com/dtolnay/rust-toolchain/commit/6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772"
+    },
+    "goto-bus-stop/setup-zig": {
+      "version": "v2.2.1",
+      "revision": "abea47f85e598557f500fa1fd2ab7464fcb39406",
+      "published": "2024-09-28T07:29:19Z",
+      "source": "https://github.com/goto-bus-stop/setup-zig/releases/tag/v2.2.1"
+    },
+    "softprops/action-gh-release": {
+      "version": "v3.0.3",
+      "revision": "efb35369e0ad2afab669f228072c1b0d510eae64",
+      "published": "2026-08-30T00:30:08Z",
+      "source": "https://github.com/softprops/action-gh-release/releases/tag/v3.0.3"
+    }
+  },
+  "cargo": {
+    "git-cliff": {
+      "version": "2.13.1",
+      "published": "2026-04-26T10:18:02.591164Z",
+      "source": "https://crates.io/api/v1/crates/git-cliff/2.13.1"
+    },
+    "cargo-edit": {
+      "version": "0.13.13",
+      "published": "2026-07-15T18:05:21.441951Z",
+      "source": "https://crates.io/api/v1/crates/cargo-edit/0.13.13"
+    },
+    "cargo-zigbuild": {
+      "version": "0.23.3",
+      "published": "2026-08-27T15:06:30.092988Z",
+      "source": "https://crates.io/api/v1/crates/cargo-zigbuild/0.23.3"
+    },
+    "cargo-deb": {
+      "version": "3.7.0",
+      "published": "2026-05-02T18:57:05.844973Z",
+      "source": "https://crates.io/api/v1/crates/cargo-deb/3.7.0"
+    },
+    "cargo-generate-rpm": {
+      "version": "0.21.0",
+      "published": "2026-05-04T01:30:11.505325Z",
+      "source": "https://crates.io/api/v1/crates/cargo-generate-rpm/0.21.0"
+    },
+    "cargo-audit": {
+      "version": "0.22.2",
+      "published": "2026-06-05T12:33:04.440539Z",
+      "source": "https://crates.io/api/v1/crates/cargo-audit/0.22.2"
+    },
+    "cargo-deny": {
+      "version": "0.20.2",
+      "published": "2026-07-09T17:58:09.303885Z",
+      "source": "https://crates.io/api/v1/crates/cargo-deny/0.20.2"
+    },
+    "cargo-nextest": {
+      "version": "0.9.143",
+      "published": "2026-08-04T22:27:47.650426Z",
+      "source": "https://crates.io/api/v1/crates/cargo-nextest/0.9.143"
+    }
+  },
+  "runtime": {
+    "rust": {
+      "version": "1.98.0",
+      "published": "2026-08-20T00:00:00Z",
+      "source": "https://static.rust-lang.org/dist/channel-rust-1.98.0.toml"
+    },
+    "node": {
+      "version": "24.20.0",
+      "published": "2026-08-26T00:00:00Z",
+      "source": "https://nodejs.org/dist/index.json"
+    },
+    "zig": {
+      "version": "0.16.0",
+      "published": "2026-04-13T00:00:00Z",
+      "source": "https://ziglang.org/download/index.json"
+    }
+  },
+  "containers": {
+    "library/node:24.20.0-alpine3.24": {
+      "version": "24.20.0-alpine3.24",
+      "revision": "sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf",
+      "published": "2026-08-27T20:39:26.456741Z",
+      "source": "https://hub.docker.com/v2/repositories/library/node/tags/24.20.0-alpine3.24"
+    },
+    "library/debian:trixie-slim": {
+      "version": "trixie-slim",
+      "revision": "sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132",
+      "published": "2026-08-25T02:30:49.377455Z",
+      "source": "https://hub.docker.com/v2/repositories/library/debian/tags/trixie-slim"
+    },
+    "docker/dockerfile:1": {
+      "version": "1",
+      "revision": "sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32",
+      "published": "2026-08-12T13:13:16.056461Z",
+      "source": "https://hub.docker.com/v2/repositories/docker/dockerfile/tags/1"
+    },
+    "library/rust:1.98.0-bookworm": {
+      "version": "1.98.0-bookworm",
+      "revision": "sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922",
+      "published": "2026-08-25T19:44:53.234639Z",
+      "source": "https://hub.docker.com/v2/repositories/library/rust/tags/1.98.0-bookworm"
+    },
+    "library/alpine:3.24": {
+      "version": "3.24",
+      "revision": "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+      "published": "2026-06-16T08:24:26.197487Z",
+      "source": "https://hub.docker.com/v2/repositories/library/alpine/tags/3.24"
+    },
+    "gcr.io/distroless/static-debian13:nonroot": {
+      "version": "nonroot",
+      "revision": "sha256:1c2c046bc09ed40fad370b599a0b1ae7987f55b01e247cf27a7c27cd97e5bbc7",
+      "published": "2026-08-21T18:07:28.848000+00:00",
+      "source": "https://gcr.io/v2/distroless/static-debian13/tags/list"
+    }
+  }
+}

@@ -23,7 +23,19 @@ The native collector uses one shared ICMP socket per address family, separate
 from ordinary ping sockets. A dispatcher matches target, identifier and sequence;
 a short send lock preserves each packet's TTL. No subprocess or external
 traceroute package is required. IPv4 and IPv6 use up to 32 hops and five rounds.
-The default network deadline is 60 seconds, with 2 seconds per hop reply; cached reverse lookups have 250 ms limits.
+The default network deadline is 60 seconds, with 2 seconds per hop reply.
+Unreached destinations and network deadlines retain responding transit hops
+and the measurements collected so far. Partial captures do not replace the
+last complete route checkpoint. New records include an optional `previous_id`
+so the comparison panel uses that complete capture even when queue gaps or
+partial captures intervene; old records retain their existing behavior. A first partial capture is visible as
+"Destination not reached", including in the default event filter.
+
+PTR names are best-effort enrichment: deduplicated lookups run concurrently
+(up to eight per capture), with 250 ms per lookup and one second overall.
+Failures, missing PTR records, and budget expiry leave numeric IPs intact and
+never fail reporting. A queue-deadline event means no worker started the trace;
+it cannot contain transit observations and is distinct from an incomplete path.
 
 `Settings → Workers → ICMP traceroutes` controls simultaneous captures (default
 8, maximum 64; restart required). One capture may wait per host, for at most

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Modal from './Modal.svelte';
   // Replication settings: three paginated tables (Peers, Rules, Inbound).
   // Lives as one component because the three lists share styling and the
   // sub-tables don't justify three separate files.
@@ -710,15 +711,7 @@
 
 <!-- ─── Add-peer modal ────────────────────────────────────────────────── -->
 {#if showAddPeer}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center"
-    style="background: rgba(0,0,0,0.4)"
-  >
-    <div
-      class="rounded border p-4 w-[28rem]"
-      style="background: var(--bg); border-color: var(--border); color: var(--fg)"
-    >
-      <h3 class="text-sm font-semibold mb-3">Add replication peer</h3>
+  <Modal title="Add replication peer" onClose={() => (showAddPeer = false)}>
       <label class="block text-xs mb-2">
         Name
         <input
@@ -775,21 +768,12 @@
           {newPeerSaving ? 'Pairing…' : 'Add peer'}
         </button>
       </div>
-    </div>
-  </div>
+  </Modal>
 {/if}
 
 <!-- ─── Edit-peer modal ───────────────────────────────────────────────── -->
 {#if editingPeer}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center"
-    style="background: rgba(0,0,0,0.4)"
-  >
-    <div
-      class="rounded border p-4 w-[28rem]"
-      style="background: var(--bg); border-color: var(--border); color: var(--fg)"
-    >
-      <h3 class="text-sm font-semibold mb-3">Edit peer: {editingPeer.name}</h3>
+  <Modal title="Edit replication peer" onClose={() => (editingPeer = null)}>
       <label class="block text-xs mb-2">
         Name
         <input
@@ -847,21 +831,12 @@
           {editPeerSaving ? 'Saving…' : 'Save'}
         </button>
       </div>
-    </div>
-  </div>
+  </Modal>
 {/if}
 
 <!-- ─── Add-rule modal ────────────────────────────────────────────────── -->
 {#if showAddRule}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center"
-    style="background: rgba(0,0,0,0.4)"
-  >
-    <div
-      class="rounded border p-4 w-[32rem]"
-      style="background: var(--bg); border-color: var(--border); color: var(--fg)"
-    >
-      <h3 class="text-sm font-semibold mb-3">Add replication rule</h3>
+  <Modal title="Add replication rule" onClose={() => (showAddRule = false)}>
       <label class="block text-xs mb-2">
         Peer
         <select
@@ -925,8 +900,7 @@
           {newRuleSaving ? 'Saving…' : 'Add rule'}
         </button>
       </div>
-    </div>
-  </div>
+  </Modal>
 {/if}
 
 {#snippet Pagination(props: {

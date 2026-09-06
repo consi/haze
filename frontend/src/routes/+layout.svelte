@@ -303,6 +303,7 @@
           class="md:hidden inline-flex flex-col gap-[3px] p-2 -mr-2"
           aria-label={burgerOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={burgerOpen}
+          data-modal-focus-fallback
           onclick={() => (burgerOpen = !burgerOpen)}
         >
           <span class="block w-5 h-[2px]" style="background: var(--fg)"></span>
@@ -337,34 +338,34 @@
             {#if canEditGroups()}
               <button
                 type="button"
-                title="Add Group"
+                title="Add Group" aria-label="Add Group"
                 onclick={() => (groupModalOpen = true)}
-                class="w-5 h-5 flex items-center justify-center rounded leading-none"
-                style="background: var(--btn-bg); color: #fff"
+                class="icon-button compact-icon-button flex items-center justify-center rounded leading-none"
+                style="background: var(--btn-bg); color: var(--btn-text)"
               >G</button>
             {/if}
             {#if canEditHosts()}
               <button
                 type="button"
-                title="Add Host"
+                title="Add Host" aria-label="Add Host"
                 onclick={() => (hostModalOpen = true)}
-                class="w-5 h-5 flex items-center justify-center rounded leading-none"
-                style="background: var(--btn-bg); color: #fff"
+                class="icon-button compact-icon-button flex items-center justify-center rounded leading-none"
+                style="background: var(--btn-bg); color: var(--btn-text)"
               >H</button>
             {/if}
             <button
               type="button"
-              title="Expand All"
+              title="Expand All" aria-label="Expand All"
               onclick={() => expandAll(groups.map((g) => g.uuid))}
-              class="w-5 h-5 flex items-center justify-center rounded leading-none"
-              style="background: var(--btn-bg); color: #fff"
+              class="icon-button compact-icon-button flex items-center justify-center rounded leading-none"
+              style="background: var(--btn-bg); color: var(--btn-text)"
             >+</button>
             <button
               type="button"
-              title="Collapse All"
+              title="Collapse All" aria-label="Collapse All"
               onclick={() => collapseAll()}
-              class="w-5 h-5 flex items-center justify-center rounded leading-none"
-              style="background: var(--btn-bg); color: #fff"
+              class="icon-button compact-icon-button flex items-center justify-center rounded leading-none"
+              style="background: var(--btn-bg); color: var(--btn-text)"
             >−</button>
           </span>
         </div>
@@ -382,23 +383,35 @@
           />
         {/if}
       </aside>
-      <!-- Resize handle: 4 px hit zone, 1 px visible divider centred on it.
+      <!-- Resize handle: 12 px hit zone, 1 px visible divider centred on it.
            role="separator" lets screen readers announce it as resizable.
            Hidden on mobile (no sidebar to resize). -->
+      <!-- The ARIA window-splitter pattern is a focusable, keyboard-operated separator. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div
         role="separator"
         aria-orientation="vertical"
         aria-label="Resize tree pane"
-        tabindex="-1"
+        aria-valuemin={TREE_MIN}
+        aria-valuemax={TREE_MAX}
+        aria-valuenow={Math.round(treeWidth)}
+        aria-valuetext={`${Math.round(treeWidth)} pixels`}
+        tabindex="0"
+        onkeydown={(event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          treeWidth = event.key === 'Home' ? TREE_MIN : event.key === 'End' ? TREE_MAX : clamp(treeWidth + (event.key === 'ArrowRight' ? 10 : -10), TREE_MIN, TREE_MAX);
+          try { localStorage.setItem(TREE_WIDTH_KEY, String(Math.round(treeWidth))); } catch { /* Storage can be unavailable in private browsing. */ }
+        }}
         onpointerdown={startResize}
         class="hidden md:block shrink-0 cursor-col-resize"
-        style="width: 4px; background: var(--border); opacity: {dragging ? 0.6 : 0.25}; transition: opacity 100ms"
+        style="width: 12px; background: linear-gradient(to right, transparent calc(50% - .5px), var(--muted) calc(50% - .5px), var(--muted) calc(50% + .5px), transparent calc(50% + .5px)); opacity: {dragging ? 0.6 : 0.25}; transition: opacity 100ms"
         onmouseenter={(e) => (e.currentTarget.style.opacity = '0.6')}
         onmouseleave={(e) => {
           if (!dragging) e.currentTarget.style.opacity = '0.25';
         }}
       ></div>
-      <main class="flex-1 overflow-y-auto min-w-0 min-h-0">
+      <main tabindex="-1" class="flex-1 overflow-y-auto min-w-0 min-h-0">
         {@render children?.()}
       </main>
 
@@ -448,40 +461,40 @@
               {#if canEditGroups()}
                 <button
                   type="button"
-                  title="Add Group"
+                  title="Add Group" aria-label="Add Group"
                   onclick={() => {
                     groupModalOpen = true;
                     burgerOpen = false;
                   }}
                   class="w-7 h-7 flex items-center justify-center rounded leading-none"
-                  style="background: var(--btn-bg); color: #fff"
+                  style="background: var(--btn-bg); color: var(--btn-text)"
                 >G</button>
               {/if}
               {#if canEditHosts()}
                 <button
                   type="button"
-                  title="Add Host"
+                  title="Add Host" aria-label="Add Host"
                   onclick={() => {
                     hostModalOpen = true;
                     burgerOpen = false;
                   }}
                   class="w-7 h-7 flex items-center justify-center rounded leading-none"
-                  style="background: var(--btn-bg); color: #fff"
+                  style="background: var(--btn-bg); color: var(--btn-text)"
                 >H</button>
               {/if}
               <button
                 type="button"
-                title="Expand All"
+                title="Expand All" aria-label="Expand All"
                 onclick={() => expandAll(groups.map((g) => g.uuid))}
                 class="w-7 h-7 flex items-center justify-center rounded leading-none"
-                style="background: var(--btn-bg); color: #fff"
+                style="background: var(--btn-bg); color: var(--btn-text)"
               >+</button>
               <button
                 type="button"
-                title="Collapse All"
+                title="Collapse All" aria-label="Collapse All"
                 onclick={() => collapseAll()}
                 class="w-7 h-7 flex items-center justify-center rounded leading-none"
-                style="background: var(--btn-bg); color: #fff"
+                style="background: var(--btn-bg); color: var(--btn-text)"
               >−</button>
             </span>
           </div>

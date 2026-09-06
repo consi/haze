@@ -461,7 +461,7 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-2 gap-2">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
       <label class="block">
         <span style="color: var(--muted)">Metric</span>
         <select bind:value={metric} class="w-full mt-0.5 px-2 py-1 rounded border" style={inputStyle}>
@@ -484,7 +484,7 @@
       </label>
     </div>
 
-    <div class="grid grid-cols-2 gap-2">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
       <label class="block">
         <span style="color: var(--muted)">Window (seconds)</span>
         <input
@@ -526,9 +526,12 @@
         Thresholds (at least one)
       </legend>
       <div class="flex items-center gap-2">
-        <input id="warn-on" type="checkbox" bind:checked={warningEnabled} />
-        <label for="warn-on" class="flex-1" style="color: var(--latency-warn)">Warning at</label>
+        <label for="warn-on" class="flex flex-1 items-center gap-2 min-h-8" style="color: var(--latency-warn)">
+          <input id="warn-on" type="checkbox" bind:checked={warningEnabled} />
+          <span>Warning at</span>
+        </label>
         <input
+          aria-label="Warning threshold"
           bind:value={warningValue}
           type="number"
           step="any"
@@ -538,9 +541,12 @@
         />
       </div>
       <div class="flex items-center gap-2">
-        <input id="crit-on" type="checkbox" bind:checked={criticalEnabled} />
-        <label for="crit-on" class="flex-1" style="color: var(--latency-bad)">Critical at</label>
+        <label for="crit-on" class="flex flex-1 items-center gap-2 min-h-8" style="color: var(--latency-bad)">
+          <input id="crit-on" type="checkbox" bind:checked={criticalEnabled} />
+          <span>Critical at</span>
+        </label>
         <input
+          aria-label="Critical threshold"
           bind:value={criticalValue}
           type="number"
           step="any"

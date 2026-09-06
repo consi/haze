@@ -222,7 +222,7 @@ pub async fn detail(
             store.predecessor(uuid, selected.timestamp, Uuid::max(), "trace")?
         };
         let previous = if let Some(ref trace) = trace {
-            store.predecessor(uuid, trace.timestamp, trace.id, "trace")?
+            comparison_trace(&store, trace)?
         } else {
             None
         };
@@ -237,4 +237,66 @@ pub async fn detail(
     .map_err(internal)?
     .ok_or(ApiError::NotFound)?;
     Ok(Json(result))
+}
+
+// New captures reference the complete checkpoint they were compared against.
+// A queue gap or another partial trace must not replace that comparison in UI.
+fn comparison_trace(
+    store: &haze_store::MetadataStore,
+    trace: &MetadataRecord,
+) -> anyhow::Result<Option<MetadataRecord>> {
+    if let Some(value) = trace.data.get("previous_id") {
+        return match value.as_str().and_then(|id| Uuid::parse_str(id).ok()) {
+            Some(id) => store.get(trace.host_uuid, id),
+            None => Ok(None),
+        };
+    }
+    store.predecessor(trace.host_uuid, trace.timestamp, trace.id, "trace")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn partial_trace_comparison_skips_intervening_queue_gap() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = haze_store::MetadataStore::new(directory.path().into());
+        let host = Uuid::new_v4();
+        let complete = MetadataRecord::new(
+            host,
+            10,
+            "trace",
+            json!({"hops":[]}),
+            json!({"reached":true}),
+        );
+        let gap = MetadataRecord::new(
+            host,
+            20,
+            "trace",
+            json!(null),
+            json!({"event":"collection_gap"}),
+        );
+        store.append_local(complete.clone(), 3600).unwrap();
+        store.append_local(gap.clone(), 3600).unwrap();
+        let mut partial = MetadataRecord::new(
+            host,
+            30,
+            "trace",
+            json!({"hops":[]}),
+            json!({"event":"incomplete","previous_id":complete.id}),
+        );
+        assert_eq!(
+            comparison_trace(&store, &partial).unwrap().unwrap().id,
+            complete.id
+        );
+        partial.data["previous_id"] = json!(Uuid::new_v4());
+        assert!(comparison_trace(&store, &partial).unwrap().is_none());
+        partial.data.as_object_mut().unwrap().remove("previous_id");
+        assert_eq!(
+            comparison_trace(&store, &partial).unwrap().unwrap().id,
+            gap.id
+        );
+    }
 }

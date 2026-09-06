@@ -35,3 +35,6 @@ governor = { workspace = true }
 arc-swap = { workspace = true }
 dashmap = { workspace = true }
 reqwest = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -15,7 +15,7 @@
   const labels:Record<string,string>={baseline:'First observed route',route_changed:'Route changed',visibility_changed:'Hop visibility changed',trace_failed:'Trace failed',collection_gap:'Collection gap',incomplete:'Destination not reached',loss_started:'Packet loss started',loss_changed:'Packet loss changed',loss_recovered:'Packet loss recovered'};
   const fmt=(ts:number)=>new Date(ts*1000).toLocaleString(undefined,{timeZone:currentTimeZone(),month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
   const short=(ts:number)=>new Date(ts*1000).toLocaleTimeString(undefined,{timeZone:currentTimeZone(),hour:'2-digit',minute:'2-digit',hour12:false});
-  const title=(r:RouteRecord)=>labels[r.data.event??'']??'Route sampled';
+  const title=(r:RouteRecord)=>r.data.event==='incomplete'&&r.data.reached?'Partial trace':labels[r.data.event??'']??'Route sampled';
   const color=(r:RouteRecord)=>r.kind==='loss'?(r.data.loss_pct===0?'var(--latency-good)':'var(--latency-bad)'):r.data.event==='route_changed'?'var(--accent)':r.data.error?'var(--latency-warn)':'var(--muted)';
   let selectedIndex=$derived(data?.records.findIndex(r=>r.id===selectedId)??-1);
   let trace=$derived(selected?.trace);
@@ -70,11 +70,11 @@
   onMount(()=>{void load();return()=>{controller?.abort();detailController?.abort();};});
 </script>
 <svelte:window onkeydown={keys}/>
-<Modal title={`Route history · ${host.display_name}`} {onClose} wide>
+<Modal title={`Route history · ${host.display_name}`} {onClose} wide contained>
   <div class="route-history">
     <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-      <div><div class="text-xs font-semibold">Paths over time</div><div class="text-[11px] muted mt-0.5">Periodic ICMP traces · 5 attempts per hop</div></div>
-      <div class="flex gap-1 items-center">
+      <div><div class="text-xs font-semibold">Paths over time</div><div class="text-[11px] muted mt-0.5">Periodic ICMP traces · up to 5 attempts per hop</div></div>
+      <div class="flex flex-wrap gap-1 items-center">
         {#each presets as [label,seconds]}<button class:active={to-from===seconds} onclick={()=>range(seconds)}>{label}</button>{/each}
         <button onclick={()=>{from=Math.floor(fromSecs);to=Math.floor(toSecs);void load();}} title="Return to the graph's time range">Graph range</button>
         <button onclick={()=>void load()} disabled={loading} aria-label="Refresh route history">↻</button>
@@ -100,7 +100,7 @@
     </div>
     <div class="flex flex-wrap items-center gap-2 my-3">
       <div class="flex gap-1"><button class:active={!all} onclick={()=>{all=false;void load();}}>Changes & loss</button><button class:active={all} onclick={()=>{all=true;void load();}}>All traces</button></div>
-      <div class="ml-auto flex items-center gap-1"><input type="datetime-local" bind:value={jump} aria-label="Jump to local date and time"/><button onclick={jumpTo} disabled={!jump}>Jump</button></div>
+      <div class="jump-controls ml-auto flex items-center gap-1 min-w-0"><input type="datetime-local" bind:value={jump} aria-label="Jump to local date and time"/><button onclick={jumpTo} disabled={!jump}>Jump</button></div>
     </div>
     {#if error}<div class="error text-xs mb-2" role="alert">{error} <button onclick={()=>void load()}>Retry</button></div>{/if}
     {#if !data&&loading}<div class="empty muted">Loading route history…</div>
@@ -119,7 +119,7 @@
           {#if data.next}<button class="w-full mt-2" onclick={()=>void load(true)} disabled={loading}>{loading?'Loading…':'Load earlier events'}</button>{/if}
         </div>
         <div class="detail-panel min-w-0" aria-busy={detailLoading}>
-          <div class="flex items-center justify-between gap-2 mb-3">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
             <div class="text-xs font-semibold">{selected?title(selected.selected):'Select an event'}</div>
             <div class="flex gap-1"><button onclick={()=>void step(1)} disabled={selectedIndex>=data.records.length-1&&!data.next} title="Previous event (left arrow)">← Earlier</button><button onclick={()=>void step(-1)} disabled={selectedIndex<=0&&!data.newer} title="Next event (right arrow)">Later →</button></div>
           </div>
@@ -132,7 +132,9 @@
             {#if trace?.data.error}<div class="text-xs mb-3" style="color:var(--latency-warn)">{trace.data.error}</div>{/if}
             {#if trace?.context}
               <div class="flex flex-wrap items-center gap-2 mb-2"><span class="mono text-[11px] muted">{trace.context.target}</span><span class="text-[10px] muted">{hops.length} hops{previous?` · ${changedCount} changed`:''}</span><div class="ml-auto flex gap-1"><button class:active={dns} onclick={()=>dns=true}>DNS</button><button class:active={!dns} onclick={()=>dns=false}>IP</button></div></div>
-              <div class="overflow-x-auto">
+              <!-- Keyboard users need to scroll the hop table independently. -->
+              <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+              <div class="overflow-x-auto" tabindex="0" role="region" aria-label="Observed and previous route hops">
                 <table class="hop-table"><thead><tr><th>#</th>{#if previous}<th>Previous path</th>{/if}<th>Observed path</th><th>RTT</th><th>Replies</th><th>Loss</th></tr></thead><tbody>
                   {#each Array.from({length:rowCount},(_,i)=>i) as i}
                     {@const metrics=trace.data.hops?.[i]}
@@ -144,7 +146,7 @@
                 </tbody></table>
               </div>
               <p class="text-[10px] muted mt-3">Hop loss measures missing traceroute replies; routers may limit these while still forwarding traffic. Destination ping loss is shown separately above.</p>
-              {#if !trace.data.reached}<p class="text-[11px] mt-2" style="color:var(--latency-warn)">Partial path · destination did not reply within the trace limit.</p>{/if}
+              {#if !trace.data.reached}<p class="text-[11px] mt-2" style="color:var(--latency-warn)">Partial path · destination did not reply. Responding transit hops are retained; missing replies alone do not prove forwarding loss.</p>{/if}
             {/if}
           {/if}
         </div>
@@ -157,16 +159,20 @@
   button{font-size:11px;padding:3px 7px;border-radius:3px;border:1px solid var(--border);color:var(--fg);background:var(--bg);white-space:nowrap;cursor:pointer}
   button:hover{border-color:var(--muted)}button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}button:disabled{opacity:.4;cursor:default}
   button.active{background:var(--border);color:var(--accent);border-color:var(--accent)}
-  input{font-size:11px;color:var(--fg);background:var(--bg);border:1px solid var(--border);padding:2px 5px;border-radius:3px;color-scheme:dark light}
-  .timeline-panel,.loss-callout{border-color:var(--border)}.timeline{height:76px;width:100%;touch-action:none;cursor:crosshair;overflow:hidden}
+  input{font-size:11px;color:var(--fg);background:var(--bg);border:1px solid var(--border);padding:2px 5px;border-radius:3px;color-scheme:inherit}
+  .timeline-panel,.loss-callout{border-color:var(--border)}.timeline{display:block;height:32px;width:100%;touch-action:none;cursor:crosshair;overflow:hidden}
   i{display:inline-block;width:6px;height:6px;border-radius:1px;margin-right:5px}
-  .history-body{display:grid;grid-template-columns:245px minmax(0,1fr);border-top:1px solid var(--border)}
-  .event-list{max-height:calc(100dvh - 300px);overflow-y:auto;padding:8px 8px 8px 0;border-right:1px solid var(--border)}
+  .route-history{min-width:0;min-height:0;display:flex;flex-direction:column;gap:0}
+  .route-history> :not(.history-body){flex-shrink:0}
+  .history-body{min-height:0;flex:1;display:grid;grid-template-columns:245px minmax(0,1fr);border-top:1px solid var(--border)}
+  .event-list{min-height:0;overflow:auto;padding:8px 8px 8px 0;border-right:1px solid var(--border)}
   button.event-row{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 7px;border-color:transparent;white-space:normal}
   button.event-row.selected{background:color-mix(in srgb,var(--accent) 9%,var(--bg));border-color:var(--border)}
-  .event-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}.detail-panel{padding:14px 0 0 14px;max-height:calc(100dvh - 280px);overflow-y:auto}
+  .event-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}.detail-panel{padding:14px 0 0 14px;min-height:0;overflow:auto;overflow-wrap:anywhere}
   .hop-table{width:100%;text-align:left;font-size:10px;border-collapse:collapse}.hop-table th{font-weight:500;color:var(--muted);padding:6px 5px;white-space:nowrap;border-bottom:1px solid var(--border)}
+  .hop-table td:first-child{white-space:nowrap;min-width:24px}
   .hop-table td{padding:8px 5px;border-bottom:1px solid var(--border);vertical-align:top}.hop-table tr.changed{background:color-mix(in srgb,var(--accent) 7%,var(--bg))}.hop-table tr.changed td:first-child{box-shadow:inset 2px 0 var(--accent);color:var(--accent)}
   .address{overflow-wrap:anywhere;min-width:95px}.empty{text-align:center;padding:50px 12px}.error{color:var(--latency-bad)}
-  @media(max-width:767px){.history-body{grid-template-columns:1fr}.event-list{max-height:180px;border-right:0;border-bottom:1px solid var(--border);padding-right:0}.detail-panel{padding-left:0;max-height:none}button{min-height:32px}.timeline-panel>div:first-child{font-size:9px}.timeline-panel>div:first-child>span:nth-child(2){display:none}input{max-width:200px}}
+  @media(min-width:768px){.route-history{flex:1;overflow:hidden}}
+  @media(max-width:767px){.history-body{grid-template-columns:minmax(0,1fr);flex:none}.event-list{max-height:180px;border-right:0;border-bottom:1px solid var(--border);padding-right:0}.detail-panel{padding-left:0;overflow:visible}.jump-controls{flex-wrap:wrap;max-width:100%}button{min-height:32px}.timeline-panel>div:first-child{font-size:9px}.timeline-panel>div:first-child>span:nth-child(2){display:none}input{max-width:200px}}
 </style>

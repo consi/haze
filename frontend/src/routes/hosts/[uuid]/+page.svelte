@@ -358,7 +358,7 @@
             type="button"
             onclick={() => selectPreset(p)}
             class="px-2 py-0.5 rounded text-xs shrink-0"
-            style="background: {preset === p ? 'var(--accent)' : 'var(--border)'}; color: {preset === p ? '#0b0d10' : 'var(--fg)'}"
+            style="background: {preset === p ? 'var(--accent)' : 'var(--border)'}; color: {preset === p ? 'var(--on-accent)' : 'var(--fg)'}"
           >
             {p.label}
           </button>
@@ -368,7 +368,7 @@
           onclick={refreshNow}
           class="ml-2 px-2 py-0.5 rounded text-xs shrink-0"
           style="background: var(--border); color: var(--fg)"
-          title="Refresh now"
+          title="Refresh now" aria-label="Refresh now"
         >
           ↻
         </button>
@@ -376,12 +376,12 @@
           type="button"
           onclick={toggleLive}
           class="px-2 py-0.5 rounded text-xs flex items-center gap-1 shrink-0"
-          style="background: {live ? 'var(--latency-good)' : 'var(--border)'}; color: {live ? '#0b0d10' : 'var(--fg)'}"
+          style="background: {live ? 'var(--latency-good)' : 'var(--border)'}; color: {live ? 'var(--on-accent)' : 'var(--fg)'}"
           title={live ? 'Pause live follow' : 'Resume live follow'}
         >
           <span
             class="inline-block rounded-full"
-            style="width: 6px; height: 6px; background: {live ? '#0b0d10' : 'var(--muted)'}; {live ? 'animation: haze-pulse 1.2s ease-in-out infinite' : ''}"
+            style="width: 6px; height: 6px; background: {live ? 'var(--on-accent)' : 'var(--muted)'}; {live ? 'animation: haze-pulse 1.2s ease-in-out infinite' : ''}"
           ></span>
           {live ? 'LIVE' : 'PAUSED'}
         </button>

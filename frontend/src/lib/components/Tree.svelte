@@ -257,7 +257,7 @@
       e.stopPropagation();
       onClick();
     }}
-    class="opacity-60 md:opacity-0 md:group-hover:opacity-60 hover:!opacity-100 focus:!opacity-100"
+    class="icon-button compact-icon-button opacity-60 md:opacity-0 md:group-hover:opacity-60 md:group-focus-within:opacity-60 hover:!opacity-100 focus:!opacity-100"
     style="color: var(--muted); padding: 2px"
     aria-label={label}
     title={label}

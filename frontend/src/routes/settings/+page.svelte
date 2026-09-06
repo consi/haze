@@ -1259,7 +1259,7 @@
                   style="background: var(--bg); border-color: var(--border); color: var(--fg)"
                 />
               </label>
-              <label class="block flex-1 min-w-[280px]">
+              <label class="block flex-1 min-w-0 w-full sm:min-w-[280px]">
                 <span class="block" style="color: var(--muted)">URL</span>
                 <input
                   bind:value={newWebhookUrl}
@@ -1720,8 +1720,8 @@
               onclick={saveWorkersAndRestart}
               disabled={workersSaving || restarting || !!workersError}
               class="px-3 py-1 rounded font-medium"
-              style="background: var(--latency-bad); color: #fff; opacity: {workersSaving || restarting || workersError ? 0.6 : 1}"
-              title="Persist the new pool sizes and exit the process. A supervisor (systemd / cargo-watch / etc.) brings it back."
+              style="background: var(--latency-bad); color: var(--on-accent); opacity: {workersSaving || restarting || workersError ? 0.6 : 1}"
+              title="Persist the new pool sizes and exit the process. A supervisor (systemd / cargo-watch / etc.) brings it back." aria-label="Persist the new pool sizes and exit the process. A supervisor (systemd / cargo-watch / etc.) brings it back."
             >
               {workersSaving ? 'Saving…' : 'Save worker settings and restart'}
             </button>

@@ -19,7 +19,12 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify dependency age and tooling pins
+        run: |
+          python3 scripts/check_dependency_age.py
+          python3 scripts/check_tooling.py
 
       - name: Derive version from tag
         id: version
@@ -28,16 +33,18 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "Releasing haze ${version}"
 
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master at cutoff
+        with:
+          toolchain: 1.98.0
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Install cargo-edit
-        run: cargo install --locked cargo-edit
+        run: cargo install --locked cargo-edit --version 0.13.13
 
       - name: Rewrite workspace version from tag
         run: cargo set-version --workspace "${{ steps.version.outputs.version }}"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: versioned-manifests
           path: |
@@ -46,14 +53,14 @@ jobs:
             crates/*/Cargo.toml
           if-no-files-found: error
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22
+          node-version: 24.20.0
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Build frontend
         run: cd frontend && npm ci && npm run build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: frontend-build
           path: frontend/build
@@ -76,38 +83,42 @@ jobs:
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Restore versioned manifests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: versioned-manifests
           path: .
 
       - name: Restore frontend build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: frontend-build
           path: frontend/build
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master at cutoff
         with:
+          toolchain: 1.98.0
           targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: ${{ matrix.target }}
 
       - name: Install zig
-        uses: goto-bus-stop/setup-zig@v2
+        uses: goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406 # v2.2.1
         with:
-          version: 0.13.0
+          version: 0.16.0
 
       - name: Install build helpers
-        run: cargo install --locked cargo-zigbuild cargo-deb cargo-generate-rpm
+        run: |
+          cargo install --locked cargo-zigbuild --version 0.23.3
+          cargo install --locked cargo-deb --version 3.7.0
+          cargo install --locked cargo-generate-rpm --version 0.21.0
 
       - name: Build static musl binary
-        run: cargo zigbuild --release --target ${{ matrix.target }} -p haze-cli
+        run: cargo zigbuild --release --locked --target ${{ matrix.target }} -p haze-cli
 
       - name: Stage binary at target/release for packagers
         # cargo-deb and cargo-generate-rpm read assets from `target/release/haze`
@@ -130,7 +141,7 @@ jobs:
           cp target/${{ matrix.target }}/generate-rpm/*.rpm dist/
           ls -la dist/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-${{ matrix.target }}
           path: dist/
@@ -143,10 +154,10 @@ jobs:
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download all build artefacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: dist-*
           merge-multiple: true
@@ -155,18 +166,18 @@ jobs:
       - name: List artefacts
         run: ls -la dist/
 
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Log in to ghcr.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: Dockerfile
@@ -183,10 +194,12 @@ jobs:
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Download all build artefacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: dist-*
           merge-multiple: true
@@ -198,11 +211,16 @@ jobs:
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
 
+      - name: Generate release changelog
+        run: |
+          cargo install --locked git-cliff --version 2.13.1 --no-default-features
+          git cliff --config cliff.toml --latest --strip header --output release-notes.md
+
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          generate_release_notes: true
+          body_path: release-notes.md
           files: dist/*
           fail_on_unmatched_files: true

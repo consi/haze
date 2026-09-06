@@ -35,4 +35,4 @@ rustls = { workspace = true }
 tokio-rustls = { workspace = true }
 webpki-roots = { workspace = true }
 
-socket2 = { version = "0.6", features = ["all"] }
+socket2 = { version = "0.6.5", features = ["all"] }

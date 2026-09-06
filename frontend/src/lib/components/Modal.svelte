@@ -6,9 +6,11 @@
     title,
     onClose,
     children,
-    wide = false
+    wide = false,
+    contained = false
   }: {
     wide?: boolean;
+    contained?: boolean;
     title: string;
     onClose: () => void;
     children: import('svelte').Snippet;
@@ -24,9 +26,10 @@
     document.body.style.overflow = 'hidden';
     dialog?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.defaultPrevented) return;
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
       if (e.key === 'Tab' && dialog) {
-        const items = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]')).filter(el => el.getClientRects().length);
+        const items = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]')).filter(el => el.getClientRects().length);
         const first=items[0],last=items[items.length-1];
         if(!first){e.preventDefault();dialog.focus();}
         else if(e.shiftKey && (document.activeElement===first||document.activeElement===dialog)){e.preventDefault();last.focus();}
@@ -38,7 +41,11 @@
       window.removeEventListener('keydown', onKey);
       stopViewport();
       document.body.style.overflow = previousOverflow;
-      priorFocus?.focus();
+      if (priorFocus?.isConnected && priorFocus.getClientRects().length) priorFocus.focus();
+      else {
+        const fallback = Array.from(document.querySelectorAll<HTMLElement>('[data-modal-focus-fallback], main')).find(el => el.getClientRects().length);
+        fallback?.focus();
+      }
     };
   });
 
@@ -86,7 +93,7 @@
     class="
       w-full {wide ? 'md:my-3 md:mx-3 md:h-[calc(100dvh-1.5rem)] md:max-h-[calc(100dvh-1.5rem)]' : 'md:max-w-2xl md:my-16 md:mx-4 md:max-h-[calc(100vh-8rem)]'}
       md:rounded md:border md:shadow-lg
-      flex flex-col
+      flex flex-col min-w-0 min-h-0
       max-h-full
     "
     style="background: var(--bg); border-color: var(--border)"
@@ -97,27 +104,29 @@
     aria-label={title}
   >
     <header
-      class="flex items-center justify-between px-3 py-2 border-b shrink-0"
+      class="flex items-center justify-between gap-2 px-3 py-1 border-b shrink-0"
       style="border-color: var(--border)"
     >
       <h2 class="text-sm md:text-xs font-semibold truncate pr-2" style="color: var(--fg)">{title}</h2>
       <button
         type="button"
         onclick={onClose}
-        class="
-          flex items-center justify-center
-          w-11 h-11 md:w-6 md:h-6 -mr-2 md:mr-0
-          text-base md:text-xs
-          rounded
-        "
+        class="icon-button icon-button"
         style="color: var(--muted)"
         aria-label="Close"
+        title="Close (Escape)"
       >
         ✕
       </button>
     </header>
-    <div class="p-3 overflow-y-auto">
+    <div class="modal-body p-3 min-w-0 min-h-0 flex-1 overflow-y-auto" class:contained>
       {@render children()}
     </div>
   </div>
 </div>
+
+<style>
+  @media (min-width: 768px) {
+    .modal-body.contained { display: flex; flex-direction: column; overflow: hidden; }
+  }
+</style>

@@ -75,11 +75,11 @@
         </span>
       </li>
       <li>
-        <span class="mono" style="font-weight: 600; color: var(--smoke-inner-text)">inner band (p25 – p75)</span>
+        <span class="mono" style="font-weight: 600; color: var(--fg)">inner band (p25 – p75)</span>
         <span style="color: var(--muted)">- where half of the samples landed.</span>
       </li>
       <li>
-        <span class="mono" style="font-weight: 600; color: var(--smoke-outer-text)">outer band (p2.5 – p97.5)</span>
+        <span class="mono" style="font-weight: 600; color: var(--muted)">outer band (p2.5 – p97.5)</span>
         <span style="color: var(--muted)">- the wider tail. Tall bands mean jitter; flat bands mean a steady link.</span>
       </li>
       <li>

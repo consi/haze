@@ -76,85 +76,85 @@ suboptimal_flops = "allow"
 
 [workspace.dependencies]
 # Async + runtime
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "signal", "sync", "fs", "io-util"] }
-async-trait = "0.1"
-futures = "0.3"
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "time", "signal", "sync", "fs", "io-util"] }
+async-trait = "0.1.92"
+futures = "0.3.34"
 
 # HTTP + API
-axum = { version = "0.8", features = ["macros", "json", "tokio", "http2"] }
-tower = "0.5"
-tower-http = { version = "0.7", features = ["trace", "compression-gzip", "compression-br", "set-header"] }
-http = "1"
-hyper = { version = "1", features = ["client", "http1", "http2"] }
-hyper-util = { version = "0.1", features = ["tokio"] }
+axum = { version = "0.8.9", features = ["macros", "json", "tokio", "http2"] }
+tower = "0.5.3"
+tower-http = { version = "0.7.0", features = ["trace", "compression-gzip", "compression-br", "set-header"] }
+http = "1.5.0"
+hyper = { version = "1.11.1", features = ["client", "http1", "http2"] }
+hyper-util = { version = "0.1.20", features = ["tokio"] }
 
 # OpenAPI / Swagger
-utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
-utoipa-axum = "0.2"
-utoipa-swagger-ui = { version = "9", features = ["axum"] }
+utoipa = { version = "5.5.0", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-axum = "0.2.0"
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 
 # Database
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "uuid", "chrono", "json"] }
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "macros", "migrate", "uuid", "chrono", "json"] }
 
 # Serialisation
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 
 # Errors / logs
-anyhow = "1"
-thiserror = "2"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+anyhow = "1.0.104"
+thiserror = "2.0.20"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json", "fmt"] }
 
 # CLI
-clap = { version = "4", features = ["derive", "env"] }
+clap = { version = "4.6.6", features = ["derive", "env"] }
 
 # Crypto / auth
-argon2 = "0.6"
-password-hash = { version = "0.6", features = ["getrandom", "phc"] }
-webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation", "conditional-ui"] }
-rand = "0.10"
-sha2 = "0.11"
-base64 = "0.23"
+argon2 = "0.6.0"
+password-hash = { version = "0.6.1", features = ["getrandom", "phc"] }
+webauthn-rs = { version = "0.5.5", features = ["danger-allow-state-serialisation", "conditional-ui"] }
+rand = "0.10.2"
+sha2 = "0.11.0"
+base64 = "0.23.1"
 
 # TLS - `ring` enabled so rustls has a crypto provider compiled in.
 # `CryptoProvider::install_default()` is still required at startup, but the
 # feature flag makes the symbols available.
-rustls = { version = "0.23", features = ["ring"] }
-tokio-rustls = "0.26"
-rustls-pemfile = "2"
-webpki-roots = "1.0"
+rustls = { version = "0.23.43", features = ["ring"] }
+tokio-rustls = "0.26.4"
+rustls-pemfile = "2.2.0"
+webpki-roots = "1.0.9"
 
 # Probes
-surge-ping = "0.9"
-hickory-resolver = "0.26"
-url = "2"
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream", "json", "query"] }
+surge-ping = "0.9.0"
+hickory-resolver = "0.26.1"
+url = "2.5.8"
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "stream", "json", "query"] }
 
 # Storage
-memmap2 = "0.9"
-parking_lot = "0.12"
-fs2 = "0.4"
+memmap2 = "0.9.11"
+parking_lot = "0.12.5"
+fs2 = "0.4.3"
 
 # Frontend embedding (no `compression` feature - it conflicts with
 # utoipa-swagger-ui's internal use of rust-embed. We pre-compress assets in the
 # Vite build to .gz/.br siblings and serve them based on Accept-Encoding.)
-rust-embed = "8"
-mime_guess = "2"
+rust-embed = "8.12.0"
+mime_guess = "2.0.5"
 
 # Utility
-uuid = { version = "1", features = ["v4", "v5", "serde"] }
-chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
-dashmap = "6"
-bytes = "1"
-zstd = "0.13"
-governor = "0.10"
-arc-swap = "1"
+uuid = { version = "1.26.0", features = ["v4", "v5", "serde"] }
+chrono = { version = "0.4.45", default-features = false, features = ["serde", "clock", "std"] }
+dashmap = "6.2.1"
+bytes = "1.12.1"
+zstd = "0.13.3"
+governor = "0.10.4"
+arc-swap = "1.9.2"
 
 
 # Dev-only
-proptest = "1"
-tempfile = "3"
+proptest = "1.11.0"
+tempfile = "3.27.0"
 
 [profile.release]
 lto = "thin"

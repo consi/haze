@@ -438,7 +438,7 @@
 
     <div>
       <span style="color: var(--muted)">Probe type</span>
-      <div class="mt-0.5 grid grid-cols-2 gap-1.5">
+      <div class="mt-0.5 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
         {#each PROBE_OPTIONS as opt (opt.kind)}
           <label
             class="flex items-start gap-2 px-2 py-1.5 rounded border cursor-pointer"
@@ -487,7 +487,7 @@
           <input bind:value={dns.query} type="text" required placeholder="e.g. example.com"
             class="w-full mt-0.5 px-2 py-1 rounded border" style={inputStyle} />
         </label>
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <label class="block">
             <span style="color: var(--muted)">Record type</span>
             <select bind:value={dns.record_type}
@@ -505,7 +505,7 @@
         </div>
 
       {:else if kind === 'tcp_connect'}
-        <div class="grid grid-cols-3 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <label class="block col-span-2">
             <span style="color: var(--muted)">Host</span>
             <input bind:value={tcp.host} type="text" required placeholder="e.g. example.com"
@@ -519,7 +519,7 @@
         </div>
 
       {:else if kind === 'tls_connect'}
-        <div class="grid grid-cols-3 gap-2 mb-2">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
           <label class="block col-span-2">
             <span style="color: var(--muted)">Host</span>
             <input bind:value={tls.host} type="text" required placeholder="e.g. example.com"
@@ -549,7 +549,7 @@
             placeholder="https://example.com/health"
             class="w-full mt-0.5 px-2 py-1 rounded border" style={inputStyle} />
         </label>
-        <div class="grid grid-cols-2 gap-2 mb-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
           <label class="block">
             <span style="color: var(--muted)">Method</span>
             <select bind:value={cfg.method}
@@ -629,7 +629,7 @@
       {/if}
     </fieldset>
 
-    <div class="grid grid-cols-2 gap-2">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
       <label class="block">
         <span style="color: var(--muted)">Interval (s)</span>
         <input bind:value={intervalSecs} type="number" min="1"

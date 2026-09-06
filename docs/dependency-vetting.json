@@ -1,0 +1,3724 @@
+{
+  "checked_at": "2026-09-06T09:03:11+00:00",
+  "cutoff": "2026-08-30T09:03:11+00:00",
+  "packages": [
+    {
+      "ecosystem": "cargo",
+      "name": "adler2",
+      "version": "2.0.1",
+      "published": "2025-06-09T22:31:53.608434Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "aho-corasick",
+      "version": "1.1.5",
+      "published": "2026-08-03T11:44:11.111398Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "alloc-no-stdlib",
+      "version": "2.0.4",
+      "published": "2022-09-12T05:29:48.261627Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "alloc-stdlib",
+      "version": "0.2.4",
+      "published": "2026-06-14T17:59:00.828151Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "allocator-api2",
+      "version": "0.2.21",
+      "published": "2024-12-01T14:49:16.555989Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "android_system_properties",
+      "version": "0.1.6",
+      "published": "2026-08-05T13:44:27.717073Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "anstream",
+      "version": "1.0.0",
+      "published": "2026-02-11T13:23:11.167553Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "anstyle",
+      "version": "1.0.14",
+      "published": "2026-03-13T18:59:28.450723Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "anstyle-parse",
+      "version": "1.0.0",
+      "published": "2026-02-11T13:23:08.814303Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "anstyle-query",
+      "version": "1.1.5",
+      "published": "2025-11-13T17:30:22.615151Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "anstyle-wincon",
+      "version": "3.0.11",
+      "published": "2025-11-13T17:30:26.488661Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "anyhow",
+      "version": "1.0.104",
+      "published": "2026-07-18T20:59:37.656167Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "arc-swap",
+      "version": "1.9.2",
+      "published": "2026-06-28T17:45:51.059560Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "argon2",
+      "version": "0.6.0",
+      "published": "2026-08-27T16:54:18.571817Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "asn1-rs",
+      "version": "0.6.2",
+      "published": "2024-07-31T13:46:26.658487Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "asn1-rs-derive",
+      "version": "0.5.1",
+      "published": "2024-07-31T13:42:16.732531Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "asn1-rs-impl",
+      "version": "0.2.0",
+      "published": "2024-02-23T08:38:59.472174Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "async-compression",
+      "version": "0.4.43",
+      "published": "2026-07-29T13:04:31.629137Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "async-trait",
+      "version": "0.1.92",
+      "published": "2026-08-08T07:10:35.376083Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "atoi",
+      "version": "2.0.0",
+      "published": "2022-10-11T17:21:42.722566Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "atomic-waker",
+      "version": "1.1.2",
+      "published": "2023-09-25T17:45:09.388277Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "autocfg",
+      "version": "1.5.1",
+      "published": "2026-05-22T11:03:04.576867Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "aws-lc-rs",
+      "version": "1.18.0",
+      "published": "2026-08-07T16:45:24.388460Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "aws-lc-sys",
+      "version": "0.44.0",
+      "published": "2026-08-07T16:24:43.574780Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "axum",
+      "version": "0.8.9",
+      "published": "2026-04-14T07:55:20.258398Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "axum-core",
+      "version": "0.5.6",
+      "published": "2025-12-27T09:19:34.014637Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "axum-macros",
+      "version": "0.5.1",
+      "published": "2026-04-14T07:55:01.145948Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "base64",
+      "version": "0.21.7",
+      "published": "2024-01-11T16:21:52.996380Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "base64",
+      "version": "0.22.1",
+      "published": "2024-04-30T23:16:40.343739Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "base64",
+      "version": "0.23.1",
+      "published": "2026-08-04T12:34:31.976297Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "base64ct",
+      "version": "1.8.3",
+      "published": "2026-01-12T04:41:30.672776Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "base64urlsafedata",
+      "version": "0.5.5",
+      "published": "2026-04-30T01:52:19.924443Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "bit-set",
+      "version": "0.8.0",
+      "published": "2024-07-16T17:18:45.390925Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "bit-vec",
+      "version": "0.8.0",
+      "published": "2024-07-16T17:14:52.246887Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "bitflags",
+      "version": "2.13.1",
+      "published": "2026-07-15T20:36:19.695060Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "blake2",
+      "version": "0.11.0",
+      "published": "2026-08-26T13:23:38.306906Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "block-buffer",
+      "version": "0.10.4",
+      "published": "2023-03-09T02:08:25.969182Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "block-buffer",
+      "version": "0.12.1",
+      "published": "2026-06-11T15:40:05.682576Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "brotli",
+      "version": "8.0.4",
+      "published": "2026-06-14T19:26:42.108285Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "brotli-decompressor",
+      "version": "5.0.3",
+      "published": "2026-06-14T18:10:09.204091Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "bumpalo",
+      "version": "3.20.3",
+      "published": "2026-05-22T14:59:11.132139Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "byteorder",
+      "version": "1.5.0",
+      "published": "2023-10-06T00:45:57.877036Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "bytes",
+      "version": "1.12.1",
+      "published": "2026-07-08T10:01:28.616466Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "cc",
+      "version": "1.4.4",
+      "published": "2026-08-21T08:20:10.205770Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "cfg-if",
+      "version": "1.0.4",
+      "published": "2025-10-15T08:12:46.455816Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "cfg_aliases",
+      "version": "0.2.2",
+      "published": "2026-07-16T14:57:16.699789Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "chacha20",
+      "version": "0.10.2",
+      "published": "2026-08-27T17:51:13.045493Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "chrono",
+      "version": "0.4.45",
+      "published": "2026-06-04T12:16:42.063037Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "clap",
+      "version": "4.6.6",
+      "published": "2026-08-06T14:03:25.998957Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "clap_builder",
+      "version": "4.6.6",
+      "published": "2026-08-06T14:03:23.670959Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "clap_derive",
+      "version": "4.6.4",
+      "published": "2026-07-21T21:59:21.295220Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "clap_lex",
+      "version": "1.1.0",
+      "published": "2026-03-12T19:10:37.648756Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "cmake",
+      "version": "0.1.58",
+      "published": "2026-03-26T17:58:29.356302Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "cmov",
+      "version": "0.5.4",
+      "published": "2026-05-28T19:07:33.005301Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "colorchoice",
+      "version": "1.0.5",
+      "published": "2026-03-13T18:59:29.020348Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "combine",
+      "version": "4.6.8",
+      "published": "2026-08-25T15:36:05.728682Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "compression-codecs",
+      "version": "0.4.38",
+      "published": "2026-04-24T12:03:16.269620Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "compression-core",
+      "version": "0.4.32",
+      "published": "2026-04-24T12:02:56.565052Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "const-oid",
+      "version": "0.10.2",
+      "published": "2026-01-07T23:11:57.242553Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "core-foundation",
+      "version": "0.10.1",
+      "published": "2025-05-26T12:40:41.787847Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "core-foundation",
+      "version": "0.9.4",
+      "published": "2023-11-30T16:04:49.362965Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "core-foundation-sys",
+      "version": "0.8.7",
+      "published": "2024-08-11T00:48:27.870880Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "cpufeatures",
+      "version": "0.2.17",
+      "published": "2025-01-25T01:35:46.131569Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "cpufeatures",
+      "version": "0.3.1",
+      "published": "2026-08-26T18:39:59.636708Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "crc",
+      "version": "3.4.0",
+      "published": "2025-11-26T17:46:02.621035Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "crc-catalog",
+      "version": "2.5.0",
+      "published": "2026-04-24T18:44:55.973498Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "crc32fast",
+      "version": "1.5.1",
+      "published": "2026-08-22T18:49:22.203015Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "critical-section",
+      "version": "1.2.0",
+      "published": "2024-10-16T13:28:54.130490Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "crossbeam-channel",
+      "version": "0.5.16",
+      "published": "2026-07-06T15:53:22.889927Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "crossbeam-epoch",
+      "version": "0.9.20",
+      "published": "2026-07-06T18:09:38.968039Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "crossbeam-queue",
+      "version": "0.3.13",
+      "published": "2026-07-06T15:52:58.228649Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "crossbeam-utils",
+      "version": "0.8.22",
+      "published": "2026-07-06T15:51:40.163512Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "crunchy",
+      "version": "0.2.4",
+      "published": "2025-06-25T12:54:43.146786Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "crypto-common",
+      "version": "0.1.6",
+      "published": "2022-07-16T21:59:26.372243Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "crypto-common",
+      "version": "0.2.2",
+      "published": "2026-05-19T16:01:22.304187Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "ctutils",
+      "version": "0.4.2",
+      "published": "2026-04-02T20:44:34.184153Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "dashmap",
+      "version": "6.2.1",
+      "published": "2026-05-17T21:28:34.356251Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "data-encoding",
+      "version": "2.11.1",
+      "published": "2026-08-03T10:39:52.996245Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "der-parser",
+      "version": "9.0.0",
+      "published": "2024-02-23T11:43:11.229255Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "deranged",
+      "version": "0.5.8",
+      "published": "2026-02-21T21:37:43.676837Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "digest",
+      "version": "0.10.7",
+      "published": "2023-05-19T17:11:30.893794Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "digest",
+      "version": "0.11.3",
+      "published": "2026-05-03T12:54:48.023505Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "displaydoc",
+      "version": "0.2.7",
+      "published": "2026-07-28T13:58:21.461609Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "dotenvy",
+      "version": "0.15.7",
+      "published": "2023-03-22T16:04:41.028594Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "dunce",
+      "version": "1.0.5",
+      "published": "2024-08-04T01:36:46.487482Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "either",
+      "version": "1.18.0",
+      "published": "2026-08-20T19:36:48.266137Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "equivalent",
+      "version": "1.0.2",
+      "published": "2025-02-14T22:14:18.212755Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "errno",
+      "version": "0.3.14",
+      "published": "2025-09-09T04:35:15.362504Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "etcetera",
+      "version": "0.11.0",
+      "published": "2025-10-28T13:28:11.765603Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "event-listener",
+      "version": "5.4.2",
+      "published": "2026-07-27T11:31:20.582548Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "fastrand",
+      "version": "2.5.0",
+      "published": "2026-07-19T12:40:53.683020Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "find-msvc-tools",
+      "version": "0.1.11",
+      "published": "2026-08-14T13:13:50.653084Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "flate2",
+      "version": "1.1.10",
+      "published": "2026-08-28T04:35:22.192325Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "flume",
+      "version": "0.12.0",
+      "published": "2025-12-08T17:22:31.630716Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "fnv",
+      "version": "1.0.7",
+      "published": "2020-05-14T16:06:29.223002Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "foldhash",
+      "version": "0.2.0",
+      "published": "2025-08-23T19:14:01.103482Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "foreign-types",
+      "version": "0.3.2",
+      "published": "2017-11-28T23:17:39.115409Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "foreign-types-shared",
+      "version": "0.1.1",
+      "published": "2017-11-28T23:16:45.760735Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "form_urlencoded",
+      "version": "1.2.2",
+      "published": "2025-08-21T08:47:43.939560Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "fs2",
+      "version": "0.4.3",
+      "published": "2018-01-06T20:18:30.565584Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "fs_extra",
+      "version": "1.3.0",
+      "published": "2023-02-03T17:59:27.093041Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "futures",
+      "version": "0.3.34",
+      "published": "2026-08-11T12:13:28.064590Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "futures-channel",
+      "version": "0.3.34",
+      "published": "2026-08-11T12:13:10.334104Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "futures-core",
+      "version": "0.3.34",
+      "published": "2026-08-11T12:13:01.547638Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "futures-executor",
+      "version": "0.3.34",
+      "published": "2026-08-11T12:13:23.714779Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "futures-intrusive",
+      "version": "0.5.0",
+      "published": "2022-11-04T06:14:20.712105Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "futures-io",
+      "version": "0.3.34",
+      "published": "2026-08-11T12:13:03.992711Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "futures-macro",
+      "version": "0.3.34",
+      "published": "2026-08-11T12:13:14.842510Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "futures-sink",
+      "version": "0.3.34",
+      "published": "2026-08-11T12:13:06.160611Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "futures-task",
+      "version": "0.3.34",
+      "published": "2026-08-11T12:13:07.886026Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "futures-timer",
+      "version": "3.0.4",
+      "published": "2026-05-20T11:17:05.928899Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "futures-util",
+      "version": "0.3.34",
+      "published": "2026-08-11T12:13:19.272525Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "generic-array",
+      "version": "0.14.9",
+      "published": "2025-10-13T14:01:34.264615Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "getrandom",
+      "version": "0.2.17",
+      "published": "2026-01-11T21:09:53.669788Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "getrandom",
+      "version": "0.3.4",
+      "published": "2025-10-14T17:47:36.464125Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "getrandom",
+      "version": "0.4.3",
+      "published": "2026-06-17T18:01:59.979552Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "glob",
+      "version": "0.3.4",
+      "published": "2026-07-21T14:53:49.688341Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "governor",
+      "version": "0.10.4",
+      "published": "2025-12-16T16:49:15.001804Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "h2",
+      "version": "0.4.19",
+      "published": "2026-08-24T12:18:29.059381Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "half",
+      "version": "2.7.1",
+      "published": "2025-10-14T03:59:26.575229Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hashbrown",
+      "version": "0.14.5",
+      "published": "2024-04-28T18:32:09.203645Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hashbrown",
+      "version": "0.16.1",
+      "published": "2025-11-20T16:47:18.741054Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hashbrown",
+      "version": "0.17.1",
+      "published": "2026-05-09T04:35:04.251Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hashlink",
+      "version": "0.11.1",
+      "published": "2026-06-05T13:47:52.916383Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "heck",
+      "version": "0.5.0",
+      "published": "2024-03-12T22:42:23.303234Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hex",
+      "version": "0.4.3",
+      "published": "2021-03-03T10:48:58.682837Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hickory-net",
+      "version": "0.26.1",
+      "published": "2026-05-01T13:53:12.133963Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hickory-proto",
+      "version": "0.26.1",
+      "published": "2026-05-01T13:52:59.141788Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hickory-resolver",
+      "version": "0.26.1",
+      "published": "2026-05-01T13:53:22.204692Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hkdf",
+      "version": "0.13.0",
+      "published": "2026-03-30T14:36:50.965552Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hmac",
+      "version": "0.13.0",
+      "published": "2026-03-29T23:19:21.430299Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "http",
+      "version": "1.5.0",
+      "published": "2026-07-29T14:57:21.755258Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "http-body",
+      "version": "1.1.0",
+      "published": "2026-07-13T17:25:06.475903Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "http-body-util",
+      "version": "0.1.5",
+      "published": "2026-08-12T15:22:21.622138Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "httparse",
+      "version": "1.10.1",
+      "published": "2025-03-03T14:44:09.975762Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "httpdate",
+      "version": "1.0.3",
+      "published": "2023-08-13T10:55:54.391658Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hybrid-array",
+      "version": "0.4.14",
+      "published": "2026-07-30T16:40:03.901575Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hyper",
+      "version": "1.11.1",
+      "published": "2026-08-28T12:22:30.892284Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hyper-rustls",
+      "version": "0.27.9",
+      "published": "2026-04-14T15:13:14.819824Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "hyper-util",
+      "version": "0.1.20",
+      "published": "2026-02-02T14:17:16.623245Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "iana-time-zone",
+      "version": "0.1.65",
+      "published": "2026-01-28T08:40:52.528531Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "iana-time-zone-haiku",
+      "version": "0.1.2",
+      "published": "2023-05-12T08:43:45.406909Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "icu_collections",
+      "version": "2.3.0",
+      "published": "2026-08-13T23:28:40.279341Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "icu_locale_core",
+      "version": "2.3.0",
+      "published": "2026-08-13T23:28:12.641726Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "icu_normalizer",
+      "version": "2.3.0",
+      "published": "2026-08-13T23:28:56.931089Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "icu_normalizer_data",
+      "version": "2.3.0",
+      "published": "2026-08-13T23:28:53.835366Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "icu_properties",
+      "version": "2.3.0",
+      "published": "2026-08-13T23:28:46.255153Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "icu_properties_data",
+      "version": "2.3.0",
+      "published": "2026-08-13T23:28:42.576523Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "icu_provider",
+      "version": "2.3.1",
+      "published": "2026-08-20T23:25:32.095205Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "idna",
+      "version": "1.1.0",
+      "published": "2025-08-21T08:48:20.326736Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "idna_adapter",
+      "version": "1.2.2",
+      "published": "2026-04-27T17:45:54.838641Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "indexmap",
+      "version": "2.14.1",
+      "published": "2026-08-28T20:31:48.564506Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "ipconfig",
+      "version": "0.3.4",
+      "published": "2026-03-24T16:12:16.513312Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "ipnet",
+      "version": "2.12.1",
+      "published": "2026-08-02T03:20:08.056738Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "is_terminal_polyfill",
+      "version": "1.70.2",
+      "published": "2025-10-21T17:00:14.577881Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "itoa",
+      "version": "1.0.18",
+      "published": "2026-03-20T00:12:37.043881Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "jni",
+      "version": "0.22.4",
+      "published": "2026-03-16T15:38:08.740007Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "jni-macros",
+      "version": "0.22.4",
+      "published": "2026-03-16T13:29:39.385205Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "jni-sys",
+      "version": "0.4.1",
+      "published": "2026-01-09T00:33:31.392921Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "jni-sys-macros",
+      "version": "0.4.1",
+      "published": "2026-01-09T00:23:44.614075Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "jobserver",
+      "version": "0.1.35",
+      "published": "2026-07-06T01:43:15.155394Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "js-sys",
+      "version": "0.3.104",
+      "published": "2026-08-08T00:57:01.489848Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "lazy_static",
+      "version": "1.5.0",
+      "published": "2024-06-21T22:48:42.440092Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "libc",
+      "version": "0.2.189",
+      "published": "2026-07-21T21:33:28.018110Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "libsqlite3-sys",
+      "version": "0.37.0",
+      "published": "2026-03-15T10:35:25.809035Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "linux-raw-sys",
+      "version": "0.12.1",
+      "published": "2025-12-23T00:00:07.059646Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "litemap",
+      "version": "0.8.3",
+      "published": "2026-08-13T23:27:57.524692Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "lock_api",
+      "version": "0.4.14",
+      "published": "2025-10-03T23:33:12.850087Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "log",
+      "version": "0.4.34",
+      "published": "2026-08-22T11:44:27.941626Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "lru-slab",
+      "version": "0.1.2",
+      "published": "2025-04-19T16:52:25.183724Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "matchers",
+      "version": "0.2.0",
+      "published": "2024-07-01T22:20:07.033866Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "matchit",
+      "version": "0.8.4",
+      "published": "2024-07-11T07:22:03.735375Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "md-5",
+      "version": "0.11.0",
+      "published": "2026-03-27T14:59:39.677170Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "memchr",
+      "version": "2.8.3",
+      "published": "2026-07-08T00:49:54.408285Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "memmap2",
+      "version": "0.9.11",
+      "published": "2026-06-22T16:04:03.992829Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "mime",
+      "version": "0.3.17",
+      "published": "2023-03-20T15:05:04.272177Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "mime_guess",
+      "version": "2.0.5",
+      "published": "2024-06-29T07:32:21.605352Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "minimal-lexical",
+      "version": "0.2.1",
+      "published": "2021-10-04T10:48:13.942306Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "miniz_oxide",
+      "version": "0.9.1",
+      "published": "2026-03-13T00:19:26.378812Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "mio",
+      "version": "1.2.2",
+      "published": "2026-07-13T15:39:09.471139Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "moka",
+      "version": "0.12.16",
+      "published": "2026-08-09T23:29:26.591998Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "ndk-context",
+      "version": "0.1.1",
+      "published": "2022-04-19T14:40:07.603632Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "no-std-net",
+      "version": "0.6.0",
+      "published": "2021-11-07T23:47:09.048740Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "nom",
+      "version": "7.1.3",
+      "published": "2023-01-15T21:06:03.248351Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "nonzero_ext",
+      "version": "0.3.0",
+      "published": "2021-08-21T15:57:43.150498Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "nu-ansi-term",
+      "version": "0.50.3",
+      "published": "2025-10-10T17:34:18.972478Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "num-bigint",
+      "version": "0.4.8",
+      "published": "2026-07-05T01:20:47.603095Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "num-conv",
+      "version": "0.2.2",
+      "published": "2026-05-18T18:35:52.284847Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "num-integer",
+      "version": "0.1.47",
+      "published": "2026-08-12T00:11:57.840357Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "num-traits",
+      "version": "0.2.19",
+      "published": "2024-05-03T21:27:39.856244Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "oid-registry",
+      "version": "0.7.1",
+      "published": "2024-08-26T13:56:38.402269Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "once_cell",
+      "version": "1.21.4",
+      "published": "2026-03-12T10:59:52.512992Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "once_cell_polyfill",
+      "version": "1.70.2",
+      "published": "2025-10-21T16:41:12.320992Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "openssl",
+      "version": "0.10.81",
+      "published": "2026-06-12T18:11:18.530903Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "openssl-macros",
+      "version": "0.1.1",
+      "published": "2023-04-01T13:58:02.902200Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "openssl-probe",
+      "version": "0.2.1",
+      "published": "2026-01-20T19:53:29.225766Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "openssl-src",
+      "version": "300.6.1+3.6.3",
+      "published": "2026-06-09T14:26:26.688753Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "openssl-sys",
+      "version": "0.9.117",
+      "published": "2026-06-12T18:11:16.432719Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "parking",
+      "version": "2.2.1",
+      "published": "2024-09-07T17:39:03.956479Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "parking_lot",
+      "version": "0.12.5",
+      "published": "2025-10-03T23:34:14.078935Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "parking_lot_core",
+      "version": "0.9.12",
+      "published": "2025-10-03T23:33:43.164426Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "password-hash",
+      "version": "0.6.1",
+      "published": "2026-04-08T01:00:26.839021Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "paste",
+      "version": "1.0.15",
+      "published": "2024-05-07T01:50:22.784771Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "pastey",
+      "version": "0.1.1",
+      "published": "2025-08-12T04:24:33.504602Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "percent-encoding",
+      "version": "2.3.2",
+      "published": "2025-08-21T08:46:50.131801Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "phc",
+      "version": "0.6.1",
+      "published": "2026-03-09T21:55:56.702822Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "pin-project-lite",
+      "version": "0.2.17",
+      "published": "2026-02-27T15:19:08.132543Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "pkg-config",
+      "version": "0.3.34",
+      "published": "2026-08-14T08:27:51.724149Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "pnet_base",
+      "version": "0.35.0",
+      "published": "2024-05-30T17:51:27.196099Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "pnet_macros",
+      "version": "0.35.0",
+      "published": "2024-05-30T17:52:40.449340Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "pnet_macros_support",
+      "version": "0.35.0",
+      "published": "2024-05-30T17:51:45.061602Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "pnet_packet",
+      "version": "0.35.0",
+      "published": "2024-05-30T17:52:59.352451Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "portable-atomic",
+      "version": "1.15.0",
+      "published": "2026-08-09T17:31:27.814296Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "potential_utf",
+      "version": "0.1.6",
+      "published": "2026-08-13T23:28:14.578806Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "powerfmt",
+      "version": "0.2.0",
+      "published": "2023-10-13T22:04:23.598335Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "ppv-lite86",
+      "version": "0.2.21",
+      "published": "2025-03-09T20:01:40.419162Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "prefix-trie",
+      "version": "0.8.4",
+      "published": "2026-05-11T18:16:47.727433Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "proc-macro2",
+      "version": "1.0.107",
+      "published": "2026-07-19T00:18:25.189787Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "proptest",
+      "version": "1.11.0",
+      "published": "2026-03-24T11:01:38.993611Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "quanta",
+      "version": "0.12.6",
+      "published": "2025-06-10T13:24:11.771310Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "quick-error",
+      "version": "1.2.3",
+      "published": "2020-01-02T20:56:38.589874Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "quinn",
+      "version": "0.11.11",
+      "published": "2026-06-22T09:43:28.028417Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "quinn-proto",
+      "version": "0.11.17",
+      "published": "2026-08-17T17:32:41.972491Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "quinn-udp",
+      "version": "0.5.15",
+      "published": "2026-07-04T19:17:31.033662Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "quote",
+      "version": "1.0.47",
+      "published": "2026-07-19T00:16:57.083778Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "r-efi",
+      "version": "5.3.0",
+      "published": "2025-06-17T09:12:38.227277Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "r-efi",
+      "version": "6.0.0",
+      "published": "2026-02-03T09:53:46.251122Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rand",
+      "version": "0.10.2",
+      "published": "2026-07-02T09:01:38.792937Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rand",
+      "version": "0.9.5",
+      "published": "2026-07-11T11:16:46.750480Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rand_chacha",
+      "version": "0.9.0",
+      "published": "2025-01-27T13:38:26.609781Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rand_core",
+      "version": "0.10.1",
+      "published": "2026-04-13T15:26:43.049921Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rand_core",
+      "version": "0.9.5",
+      "published": "2026-01-13T09:22:22.780002Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rand_pcg",
+      "version": "0.10.2",
+      "published": "2026-04-11T13:36:48.925934Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rand_xorshift",
+      "version": "0.4.0",
+      "published": "2025-01-27T14:40:36.244226Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "raw-cpuid",
+      "version": "11.6.0",
+      "published": "2025-09-05T02:59:39.561516Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "redox_syscall",
+      "version": "0.5.18",
+      "published": "2025-10-04T14:57:04.747959Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "regex",
+      "version": "1.13.1",
+      "published": "2026-07-15T20:19:35.162139Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "regex-automata",
+      "version": "0.4.18",
+      "published": "2026-08-04T13:10:37.385020Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "regex-syntax",
+      "version": "0.8.11",
+      "published": "2026-06-09T15:00:25.566550Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "reqwest",
+      "version": "0.13.4",
+      "published": "2026-05-25T17:12:48.317444Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "resolv-conf",
+      "version": "0.7.6",
+      "published": "2025-11-18T08:33:47.255263Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "ring",
+      "version": "0.17.14",
+      "published": "2025-03-11T19:42:03.889273Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rust-embed",
+      "version": "8.12.0",
+      "published": "2026-07-08T06:06:06.917158Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rust-embed-impl",
+      "version": "8.12.0",
+      "published": "2026-07-08T06:05:02.247784Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rust-embed-utils",
+      "version": "8.12.0",
+      "published": "2026-07-08T06:04:41.831858Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rustc-hash",
+      "version": "2.1.3",
+      "published": "2026-07-02T19:13:03.150587Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rustc_version",
+      "version": "0.4.1",
+      "published": "2024-08-28T09:21:22.033328Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rusticata-macros",
+      "version": "4.1.0",
+      "published": "2022-02-07T10:59:17.467859Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rustix",
+      "version": "1.1.4",
+      "published": "2026-02-22T16:22:51.655697Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rustls",
+      "version": "0.23.43",
+      "published": "2026-07-29T16:14:13.433091Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rustls-native-certs",
+      "version": "0.8.4",
+      "published": "2026-06-01T12:16:09.573832Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rustls-pki-types",
+      "version": "1.15.1",
+      "published": "2026-07-23T09:56:11.191923Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rustls-platform-verifier",
+      "version": "0.7.0",
+      "published": "2026-04-12T09:27:15.687200Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rustls-platform-verifier-android",
+      "version": "0.1.1",
+      "published": "2024-07-29T13:27:11.000250Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rustls-webpki",
+      "version": "0.103.15",
+      "published": "2026-08-21T16:40:00.687282Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rustversion",
+      "version": "1.0.23",
+      "published": "2026-07-07T02:10:26.015429Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "rusty-fork",
+      "version": "0.3.1",
+      "published": "2025-10-04T22:48:23.194025Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "ryu",
+      "version": "1.0.23",
+      "published": "2026-02-08T20:34:03.456199Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "same-file",
+      "version": "1.0.6",
+      "published": "2020-01-11T17:02:30.960838Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "schannel",
+      "version": "0.1.29",
+      "published": "2026-03-10T09:17:10.165757Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "scopeguard",
+      "version": "1.2.0",
+      "published": "2023-07-17T13:47:53.232324Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "security-framework",
+      "version": "3.7.0",
+      "published": "2026-02-20T00:28:54.024219Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "security-framework-sys",
+      "version": "2.17.0",
+      "published": "2026-02-20T00:27:26.362406Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "semver",
+      "version": "1.0.28",
+      "published": "2026-04-04T00:25:14.379075Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "serde",
+      "version": "1.0.229",
+      "published": "2026-07-18T23:05:13.266456Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "serde_cbor_2",
+      "version": "0.13.0",
+      "published": "2025-06-14T02:12:18.375680Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "serde_core",
+      "version": "1.0.229",
+      "published": "2026-07-18T23:05:10.896830Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "serde_derive",
+      "version": "1.0.229",
+      "published": "2026-07-18T23:05:07.504375Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "serde_json",
+      "version": "1.0.151",
+      "published": "2026-07-20T05:54:44.078083Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "serde_path_to_error",
+      "version": "0.1.20",
+      "published": "2025-09-15T15:05:54.817744Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "serde_urlencoded",
+      "version": "0.7.1",
+      "published": "2022-01-17T11:26:21.628923Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sha1",
+      "version": "0.11.0",
+      "published": "2026-03-27T14:07:50.054737Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sha1_smol",
+      "version": "1.0.1",
+      "published": "2024-07-21T20:34:38.814832Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sha2",
+      "version": "0.10.9",
+      "published": "2025-04-30T14:38:09.894118Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sha2",
+      "version": "0.11.0",
+      "published": "2026-03-25T15:05:27.949444Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sharded-slab",
+      "version": "0.1.7",
+      "published": "2023-10-04T19:37:55.401239Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "shlex",
+      "version": "2.0.1",
+      "published": "2026-05-17T18:56:12.775983Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "signal-hook-registry",
+      "version": "1.4.8",
+      "published": "2025-12-25T17:35:43.742246Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "simd-adler32",
+      "version": "0.3.10",
+      "published": "2026-07-14T17:42:45.047242Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "simd_cesu8",
+      "version": "1.2.0",
+      "published": "2026-07-13T21:51:49.803302Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "simdutf8",
+      "version": "0.1.5",
+      "published": "2024-09-22T09:18:22.610907Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "slab",
+      "version": "0.4.12",
+      "published": "2026-01-31T12:59:22.609198Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "smallvec",
+      "version": "1.15.2",
+      "published": "2026-06-11T20:52:32.050589Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "socket2",
+      "version": "0.6.5",
+      "published": "2026-07-13T19:45:58.436336Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "spin",
+      "version": "0.9.9",
+      "published": "2026-07-13T19:44:05.786736Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "spinning_top",
+      "version": "0.3.0",
+      "published": "2023-10-19T05:52:13.265054Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sqlx",
+      "version": "0.9.0",
+      "published": "2026-05-21T17:35:53.403466Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sqlx-core",
+      "version": "0.9.0",
+      "published": "2026-05-21T17:33:20.890999Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sqlx-macros",
+      "version": "0.9.0",
+      "published": "2026-05-21T17:35:10.879458Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sqlx-macros-core",
+      "version": "0.9.0",
+      "published": "2026-05-21T17:34:54.550730Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sqlx-mysql",
+      "version": "0.9.0",
+      "published": "2026-05-21T17:33:45.946246Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sqlx-postgres",
+      "version": "0.9.0",
+      "published": "2026-05-21T17:34:06.907340Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sqlx-sqlite",
+      "version": "0.9.0",
+      "published": "2026-05-21T17:34:25.569561Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "stable_deref_trait",
+      "version": "1.2.1",
+      "published": "2025-10-09T05:24:54.643083Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "stringprep",
+      "version": "0.1.5",
+      "published": "2024-05-25T13:22:49.993689Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "strsim",
+      "version": "0.11.1",
+      "published": "2024-04-02T22:18:09.406790Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "subtle",
+      "version": "2.6.1",
+      "published": "2024-06-24T17:25:24.458503Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "surge-ping",
+      "version": "0.9.0",
+      "published": "2026-06-29T18:02:56.807122Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "syn",
+      "version": "2.0.119",
+      "published": "2026-07-15T00:23:48.828241Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "syn",
+      "version": "3.0.4",
+      "published": "2026-08-24T00:39:54.110906Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "sync_wrapper",
+      "version": "1.0.2",
+      "published": "2024-11-20T16:29:59.416129Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "synstructure",
+      "version": "0.13.2",
+      "published": "2025-04-30T16:37:46.407388Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "system-configuration",
+      "version": "0.7.0",
+      "published": "2025-12-02T16:19:39.317584Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "system-configuration-sys",
+      "version": "0.6.0",
+      "published": "2024-01-31T13:42:46.487586Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tagptr",
+      "version": "0.2.0",
+      "published": "2021-08-13T09:10:42.049617Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tempfile",
+      "version": "3.27.0",
+      "published": "2026-03-11T00:20:04.812840Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "thiserror",
+      "version": "1.0.69",
+      "published": "2024-11-10T06:24:10.762680Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "thiserror",
+      "version": "2.0.20",
+      "published": "2026-08-08T06:22:23.795550Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "thiserror-impl",
+      "version": "1.0.69",
+      "published": "2024-11-10T06:24:04.631987Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "thiserror-impl",
+      "version": "2.0.20",
+      "published": "2026-08-08T06:22:19.469295Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "thread_local",
+      "version": "1.1.10",
+      "published": "2026-07-10T21:20:29.158200Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "time",
+      "version": "0.3.55",
+      "published": "2026-08-01T08:08:34.139758Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "time-core",
+      "version": "0.1.9",
+      "published": "2026-06-12T08:14:02.976372Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "time-macros",
+      "version": "0.2.32",
+      "published": "2026-07-20T08:27:37.909264Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tinystr",
+      "version": "0.8.4",
+      "published": "2026-08-13T23:28:07.485828Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tinyvec",
+      "version": "1.12.0",
+      "published": "2026-07-10T20:03:55.974590Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tinyvec_macros",
+      "version": "0.1.1",
+      "published": "2023-02-02T23:03:04.651564Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tokio",
+      "version": "1.53.1",
+      "published": "2026-07-20T17:06:09.996426Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tokio-macros",
+      "version": "2.7.2",
+      "published": "2026-07-29T13:15:27.042096Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tokio-rustls",
+      "version": "0.26.4",
+      "published": "2025-09-26T15:31:04.364599Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tokio-stream",
+      "version": "0.1.19",
+      "published": "2026-07-22T08:19:01.447272Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tokio-util",
+      "version": "0.7.19",
+      "published": "2026-07-21T12:10:46.915710Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tower",
+      "version": "0.5.3",
+      "published": "2026-01-12T18:43:05.227461Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tower-http",
+      "version": "0.6.11",
+      "published": "2026-05-18T12:51:03.996149Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tower-http",
+      "version": "0.7.0",
+      "published": "2026-06-15T14:01:18.432430Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tower-layer",
+      "version": "0.3.3",
+      "published": "2024-08-13T16:53:54.096608Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tower-service",
+      "version": "0.3.3",
+      "published": "2024-08-13T16:23:33.548845Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tracing",
+      "version": "0.1.44",
+      "published": "2025-12-18T14:26:12.360139Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tracing-attributes",
+      "version": "0.1.31",
+      "published": "2025-11-26T11:23:01.809940Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tracing-core",
+      "version": "0.1.36",
+      "published": "2025-12-18T14:13:04.171045Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tracing-log",
+      "version": "0.2.0",
+      "published": "2023-10-25T17:01:37.024993Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tracing-serde",
+      "version": "0.2.0",
+      "published": "2024-11-27T21:24:29.884640Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "tracing-subscriber",
+      "version": "0.3.23",
+      "published": "2026-03-13T10:04:15.571048Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "try-lock",
+      "version": "0.2.5",
+      "published": "2023-12-07T16:13:16.960779Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "typenum",
+      "version": "1.20.1",
+      "published": "2026-05-29T16:00:41.793255Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "unarray",
+      "version": "0.1.4",
+      "published": "2022-11-30T17:09:42.916530Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "unicase",
+      "version": "2.9.0",
+      "published": "2026-01-06T15:50:10.409065Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "unicode-bidi",
+      "version": "0.3.18",
+      "published": "2024-12-16T23:09:47.459625Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "unicode-ident",
+      "version": "1.0.24",
+      "published": "2026-02-16T02:46:44.304053Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "unicode-normalization",
+      "version": "0.1.25",
+      "published": "2025-10-30T16:06:38.929447Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "unicode-properties",
+      "version": "0.1.4",
+      "published": "2025-10-30T16:34:55.538672Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "untrusted",
+      "version": "0.9.0",
+      "published": "2021-07-13T22:13:26.650010Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "url",
+      "version": "2.5.8",
+      "published": "2026-01-05T22:14:31.414927Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "utf8_iter",
+      "version": "1.0.4",
+      "published": "2023-12-01T17:26:51.542538Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "utf8parse",
+      "version": "0.2.2",
+      "published": "2024-06-08T07:07:41.813419Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "utoipa",
+      "version": "5.5.0",
+      "published": "2026-05-04T21:20:12.912705Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "utoipa-axum",
+      "version": "0.2.0",
+      "published": "2025-01-16T09:39:14.367859Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "utoipa-gen",
+      "version": "5.5.0",
+      "published": "2026-05-04T21:19:46.887609Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "uuid",
+      "version": "1.26.0",
+      "published": "2026-08-26T22:08:30.860532Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "valuable",
+      "version": "0.1.1",
+      "published": "2025-01-17T00:46:34.256238Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "vcpkg",
+      "version": "0.2.15",
+      "published": "2021-06-19T16:35:46.573605Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "version_check",
+      "version": "0.9.5",
+      "published": "2024-07-25T23:38:14.142737Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "wait-timeout",
+      "version": "0.2.1",
+      "published": "2025-02-03T12:22:33.904538Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "walkdir",
+      "version": "2.5.0",
+      "published": "2024-03-01T17:55:09.221032Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "want",
+      "version": "0.3.1",
+      "published": "2023-06-14T21:50:52.862160Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "wasi",
+      "version": "0.11.1+wasi-snapshot-preview1",
+      "published": "2025-06-10T14:23:45.376914Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "wasip2",
+      "version": "1.0.4+wasi-0.2.12",
+      "published": "2026-06-12T17:42:43.116313Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "wasm-bindgen",
+      "version": "0.2.127",
+      "published": "2026-08-08T00:56:59.500214Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "wasm-bindgen-futures",
+      "version": "0.4.77",
+      "published": "2026-08-08T00:57:06.975258Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "wasm-bindgen-macro",
+      "version": "0.2.127",
+      "published": "2026-08-08T00:56:57.526148Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "wasm-bindgen-macro-support",
+      "version": "0.2.127",
+      "published": "2026-08-08T00:56:55.670334Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "wasm-bindgen-shared",
+      "version": "0.2.127",
+      "published": "2026-08-08T00:56:52.445936Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "wasm-streams",
+      "version": "0.5.0",
+      "published": "2026-01-22T08:14:59.195606Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "web-sys",
+      "version": "0.3.104",
+      "published": "2026-08-08T00:57:03.760573Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "web-time",
+      "version": "1.1.0",
+      "published": "2024-03-01T10:51:46.373917Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "webauthn-attestation-ca",
+      "version": "0.5.5",
+      "published": "2026-04-30T01:53:11.397887Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "webauthn-rs",
+      "version": "0.5.5",
+      "published": "2026-04-30T01:56:25.731940Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "webauthn-rs-core",
+      "version": "0.5.5",
+      "published": "2026-04-30T01:56:14.401881Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "webauthn-rs-proto",
+      "version": "0.5.5",
+      "published": "2026-04-30T01:54:59.775573Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "webpki-root-certs",
+      "version": "1.0.9",
+      "published": "2026-07-18T09:30:54.919781Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "webpki-roots",
+      "version": "1.0.9",
+      "published": "2026-07-18T09:30:44.802479Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "whoami",
+      "version": "2.1.3",
+      "published": "2026-08-11T23:31:57.132972Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "widestring",
+      "version": "1.2.1",
+      "published": "2025-10-09T01:35:09.994302Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "winapi",
+      "version": "0.3.9",
+      "published": "2020-06-26T11:34:33.480855Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "winapi-i686-pc-windows-gnu",
+      "version": "0.4.0",
+      "published": "2018-01-18T00:55:38.910834Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "winapi-util",
+      "version": "0.1.11",
+      "published": "2025-09-07T12:24:31.232695Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "winapi-x86_64-pc-windows-gnu",
+      "version": "0.4.0",
+      "published": "2018-01-18T00:55:12.008307Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-core",
+      "version": "0.62.2",
+      "published": "2025-10-06T19:15:14.207850Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-implement",
+      "version": "0.60.2",
+      "published": "2025-10-06T19:13:31.467507Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-interface",
+      "version": "0.59.3",
+      "published": "2025-10-06T19:14:18.053188Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-link",
+      "version": "0.2.1",
+      "published": "2025-10-06T17:35:08.351469Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-registry",
+      "version": "0.6.1",
+      "published": "2025-10-06T19:17:38.227483Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-result",
+      "version": "0.4.1",
+      "published": "2025-10-06T19:14:39.441465Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-strings",
+      "version": "0.5.1",
+      "published": "2025-10-06T19:15:01.410695Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-sys",
+      "version": "0.52.0",
+      "published": "2023-11-15T18:55:55.748059Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-sys",
+      "version": "0.61.2",
+      "published": "2025-10-06T19:18:30.163595Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows-targets",
+      "version": "0.52.6",
+      "published": "2024-07-03T19:44:18.100049Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows_aarch64_gnullvm",
+      "version": "0.52.6",
+      "published": "2024-07-03T19:43:36.557711Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows_aarch64_msvc",
+      "version": "0.52.6",
+      "published": "2024-07-03T19:43:40.566034Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows_i686_gnu",
+      "version": "0.52.6",
+      "published": "2024-07-03T19:43:46.438870Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows_i686_gnullvm",
+      "version": "0.52.6",
+      "published": "2024-07-03T19:43:50.092560Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows_i686_msvc",
+      "version": "0.52.6",
+      "published": "2024-07-03T19:43:54.897517Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows_x86_64_gnu",
+      "version": "0.52.6",
+      "published": "2024-07-03T19:43:58.189149Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows_x86_64_gnullvm",
+      "version": "0.52.6",
+      "published": "2024-07-03T19:44:03.184321Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "windows_x86_64_msvc",
+      "version": "0.52.6",
+      "published": "2024-07-03T19:44:07.225369Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "wit-bindgen",
+      "version": "0.57.1",
+      "published": "2026-04-17T17:49:55.029832Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "writeable",
+      "version": "0.6.4",
+      "published": "2026-08-13T23:28:09.637125Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "x509-parser",
+      "version": "0.16.0",
+      "published": "2024-02-29T09:42:49.066112Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "yoke",
+      "version": "0.8.3",
+      "published": "2026-06-03T20:59:17.678438Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "yoke-derive",
+      "version": "0.8.2",
+      "published": "2026-04-01T16:46:42.411874Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zerocopy",
+      "version": "0.8.56",
+      "published": "2026-08-06T11:23:48.879946Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zerocopy-derive",
+      "version": "0.8.56",
+      "published": "2026-08-06T11:23:42.731160Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zerofrom",
+      "version": "0.1.8",
+      "published": "2026-05-12T09:08:18.380489Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zerofrom-derive",
+      "version": "0.1.7",
+      "published": "2026-04-01T16:46:45.862563Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zeroize",
+      "version": "1.9.0",
+      "published": "2026-06-12T18:42:35.275395Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zerotrie",
+      "version": "0.2.5",
+      "published": "2026-08-13T23:28:19.996564Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zerovec",
+      "version": "0.11.8",
+      "published": "2026-08-19T22:32:16.933982Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zerovec-derive",
+      "version": "0.11.6",
+      "published": "2026-08-20T23:25:28.777419Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zlib-rs",
+      "version": "0.6.7",
+      "published": "2026-08-03T13:07:20.445034Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zmij",
+      "version": "1.0.23",
+      "published": "2026-07-13T12:58:53.705886Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zstd",
+      "version": "0.13.3",
+      "published": "2025-02-20T21:43:13.047065Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zstd-safe",
+      "version": "7.2.4",
+      "published": "2025-03-20T14:47:49.625660Z",
+      "error": null
+    },
+    {
+      "ecosystem": "cargo",
+      "name": "zstd-sys",
+      "version": "2.0.16+zstd.1.5.7",
+      "published": "2025-09-04T14:13:34.313033Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@jridgewell/gen-mapping",
+      "version": "0.3.13",
+      "published": "2025-08-12T06:43:21.134Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@jridgewell/remapping",
+      "version": "2.3.5",
+      "published": "2025-08-12T06:43:35.321Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@jridgewell/resolve-uri",
+      "version": "3.1.2",
+      "published": "2024-02-14T19:32:38.143Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@jridgewell/sourcemap-codec",
+      "version": "1.5.5",
+      "published": "2025-08-12T06:43:59.139Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@jridgewell/trace-mapping",
+      "version": "0.3.31",
+      "published": "2025-09-10T20:12:49.468Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@oxc-project/types",
+      "version": "0.147.0",
+      "published": "2026-08-24T11:28:49.935Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@polka/url",
+      "version": "1.0.0-next.29",
+      "published": "2025-04-09T18:41:21.389Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-android-arm-eabi",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:03:38.458Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-android-arm64",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:05:07.698Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-darwin-arm64",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:08:01.532Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-darwin-x64",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:06:22.635Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-freebsd-x64",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:19:42.027Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-linux-arm-gnueabihf",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:06:55.613Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-linux-arm64-gnu",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:05:23.064Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-linux-arm64-musl",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:05:30.827Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-linux-ppc64-gnu",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:06:01.072Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-linux-s390x-gnu",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:07:08.700Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-linux-x64-gnu",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:06:46.821Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-linux-x64-musl",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:11:55.971Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-openharmony-arm64",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:28:41.904Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-win32-arm64-msvc",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:06:15.180Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/binding-win32-x64-msvc",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:06:30.019Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@rolldown/pluginutils",
+      "version": "1.0.1",
+      "published": "2026-05-13T03:52:29.927Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@simplewebauthn/browser",
+      "version": "13.3.0",
+      "published": "2026-03-10T05:55:51.036Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@standard-schema/spec",
+      "version": "1.1.0",
+      "published": "2025-12-15T20:49:46.431Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@sveltejs/acorn-typescript",
+      "version": "1.0.13",
+      "published": "2026-08-13T11:13:58.374Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@sveltejs/adapter-static",
+      "version": "3.0.10",
+      "published": "2025-10-02T14:22:08.571Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@sveltejs/kit",
+      "version": "2.70.3",
+      "published": "2026-08-18T15:02:00.715Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@sveltejs/load-config",
+      "version": "0.2.3",
+      "published": "2026-08-11T20:49:05.521Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@sveltejs/vite-plugin-svelte",
+      "version": "7.3.0",
+      "published": "2026-08-08T05:02:42.306Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/node",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:03:45.588Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:03:29.017Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-android-arm64",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:02:16.125Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-darwin-arm64",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:02:23.502Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-darwin-x64",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:02:30.305Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-freebsd-x64",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:02:38.773Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-linux-arm-gnueabihf",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:02:44.010Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-linux-arm64-gnu",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:02:50.692Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-linux-arm64-musl",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:02:58.961Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-linux-x64-gnu",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:03:09.029Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-linux-x64-musl",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:03:15.491Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-wasm32-wasi",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:04:17.028Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-win32-arm64-msvc",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:03:19.935Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/oxide-win32-x64-msvc",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:03:24.526Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@tailwindcss/vite",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:04:06.316Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/cookie",
+      "version": "0.6.0",
+      "published": "2023-11-26T22:07:02.296Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/estree",
+      "version": "1.0.9",
+      "published": "2026-05-06T21:01:00.975Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@types/node",
+      "version": "24.13.3",
+      "published": "2026-07-08T06:48:03.261Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "acorn",
+      "version": "8.16.0",
+      "published": "2026-02-19T15:06:28.070Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "aria-query",
+      "version": "5.3.1",
+      "published": "2024-09-12T21:47:50.403Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "axobject-query",
+      "version": "4.1.0",
+      "published": "2024-07-15T19:08:33.508Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "chokidar",
+      "version": "4.0.3",
+      "published": "2024-12-18T22:21:34.451Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "clsx",
+      "version": "2.1.1",
+      "published": "2024-04-23T05:26:04.645Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "cookie",
+      "version": "0.7.2",
+      "published": "2024-10-07T03:41:28.828Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "deepmerge",
+      "version": "4.3.1",
+      "published": "2023-03-16T22:58:56.511Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "detect-libc",
+      "version": "2.1.2",
+      "published": "2025-10-05T12:46:33.077Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "devalue",
+      "version": "5.8.1",
+      "published": "2026-05-14T18:46:14.320Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "enhanced-resolve",
+      "version": "5.24.5",
+      "published": "2026-07-30T10:14:17.893Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "esm-env",
+      "version": "1.2.2",
+      "published": "2025-01-08T20:32:34.154Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "esrap",
+      "version": "2.3.6",
+      "published": "2026-08-21T18:00:20.654Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "fdir",
+      "version": "6.5.0",
+      "published": "2025-08-14T16:56:03.948Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "fsevents",
+      "version": "2.3.3",
+      "published": "2023-08-21T16:24:22.854Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "graceful-fs",
+      "version": "4.2.11",
+      "published": "2023-03-16T19:30:19.323Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "is-reference",
+      "version": "3.0.3",
+      "published": "2024-11-12T14:51:44.271Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "jiti",
+      "version": "2.7.0",
+      "published": "2026-05-05T21:02:47.918Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "kleur",
+      "version": "4.1.5",
+      "published": "2022-06-26T18:50:12.559Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:43.754Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:11:09.509Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-android-arm64",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:04.650Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-android-arm64",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:10:36.404Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-darwin-arm64",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:07.357Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-darwin-arm64",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:10:38.380Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-darwin-x64",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:10.192Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-darwin-x64",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:10:40.758Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-freebsd-x64",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:12.887Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-freebsd-x64",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:10:43.067Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-linux-arm-gnueabihf",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:15.620Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-linux-arm-gnueabihf",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:10:45.198Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-linux-arm64-gnu",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:18.594Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-linux-arm64-gnu",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:10:47.355Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-linux-arm64-musl",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:21.203Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-linux-arm64-musl",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:10:49.830Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-linux-x64-gnu",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:24.274Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-linux-x64-gnu",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:10:52.507Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-linux-x64-musl",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:27.400Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-linux-x64-musl",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:10:54.935Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-win32-arm64-msvc",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:30.176Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-win32-arm64-msvc",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:10:57.219Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-win32-x64-msvc",
+      "version": "1.32.0",
+      "published": "2026-03-09T04:23:33.073Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "lightningcss-win32-x64-msvc",
+      "version": "1.33.0",
+      "published": "2026-07-20T05:10:59.727Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "locate-character",
+      "version": "3.0.0",
+      "published": "2023-06-15T16:16:42.915Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "magic-string",
+      "version": "0.30.21",
+      "published": "2025-10-24T00:59:47.122Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "magic-string",
+      "version": "1.2.3",
+      "published": "2026-08-26T10:41:06.931Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "mri",
+      "version": "1.2.0",
+      "published": "2021-09-12T22:35:52.359Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "mrmime",
+      "version": "2.0.1",
+      "published": "2025-02-17T18:17:05.137Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "nanoid",
+      "version": "3.3.18",
+      "published": "2026-08-07T16:41:05.696Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "obug",
+      "version": "2.1.4",
+      "published": "2026-07-16T16:28:10.927Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "picocolors",
+      "version": "1.1.1",
+      "published": "2024-10-16T18:20:03.921Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "picomatch",
+      "version": "4.0.7",
+      "published": "2026-08-24T14:36:23.690Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "postcss",
+      "version": "8.5.26",
+      "published": "2026-08-06T08:33:00.043Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "readdirp",
+      "version": "4.1.2",
+      "published": "2025-02-14T17:27:21.994Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "rolldown",
+      "version": "1.2.6",
+      "published": "2026-08-26T12:06:57.950Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "sade",
+      "version": "1.8.1",
+      "published": "2022-01-06T17:09:33.711Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "set-cookie-parser",
+      "version": "3.1.0",
+      "published": "2026-03-20T16:53:03.470Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "sirv",
+      "version": "3.0.2",
+      "published": "2025-09-03T22:05:27.662Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "source-map-js",
+      "version": "1.2.1",
+      "published": "2024-09-08T16:22:55.645Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "svelte",
+      "version": "5.57.0",
+      "published": "2026-08-28T23:33:45.038Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "svelte-check",
+      "version": "4.7.6",
+      "published": "2026-08-13T05:47:23.067Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "tailwindcss",
+      "version": "4.3.3",
+      "published": "2026-07-16T12:03:35.267Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "tapable",
+      "version": "2.3.3",
+      "published": "2026-04-21T13:37:30.215Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "tinyglobby",
+      "version": "0.2.17",
+      "published": "2026-05-30T19:57:21.717Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "totalist",
+      "version": "3.0.1",
+      "published": "2023-04-03T18:36:39.508Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript",
+      "version": "6.0.3",
+      "published": "2026-04-16T23:38:27.905Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "undici-types",
+      "version": "7.18.2",
+      "published": "2026-01-06T15:57:40.133Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "uplot",
+      "version": "1.6.32",
+      "published": "2025-03-14T02:51:47.242Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "vite",
+      "version": "8.2.2",
+      "published": "2026-08-20T04:14:39.107Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "vitefu",
+      "version": "1.1.3",
+      "published": "2026-04-01T02:55:28.273Z",
+      "error": null
+    },
+    {
+      "ecosystem": "npm",
+      "name": "zimmerframe",
+      "version": "1.1.4",
+      "published": "2025-09-09T17:55:31.852Z",
+      "error": null
+    }
+  ],
+  "errors": []
+}

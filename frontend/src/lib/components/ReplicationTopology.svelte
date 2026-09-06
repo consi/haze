@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Modal from './Modal.svelte';
   // DAG of every upstream instance that contributes data to THIS one.
   // Each peer P contributes a path:
   //   P.upstream_chain[0] → … → P.upstream_chain[last] → P.source → this
@@ -165,11 +166,13 @@
     panY = cy - (cy - panY) * (newZoom / zoom);
     zoom = newZoom;
   }
-  function onMouseDown(ev: MouseEvent) {
+  function onMouseDown(ev: PointerEvent) {
+    if (ev.button !== 0) return;
+    (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
     dragging = true;
     dragStart = { x: ev.clientX, y: ev.clientY, panX, panY };
   }
-  function onMouseMove(ev: MouseEvent) {
+  function onMouseMove(ev: PointerEvent) {
     if (!dragging) return;
     panX = dragStart.panX + (ev.clientX - dragStart.x);
     panY = dragStart.panY + (ev.clientY - dragStart.y);
@@ -209,32 +212,18 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div
-  class="fixed inset-0 z-50 flex items-center justify-center"
-  style="background: rgba(0,0,0,0.45)"
-  onclick={onClose}
-  role="dialog"
-  aria-modal="true"
-  tabindex="-1"
-  onkeydown={(e) => e.key === 'Escape' && onClose()}
->
-  <div
-    class="rounded border p-4"
-    style="background: var(--bg); border-color: var(--border); color: var(--fg); max-width: 95vw; width: 720px"
-    onclick={(e) => e.stopPropagation()}
-    role="document"
-  >
-    <div class="flex items-center justify-between mb-3">
+<Modal title="Replication topology" {onClose}>
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
       <div>
-        <h3 class="text-sm font-semibold">Replication topology</h3>
+
         <p class="text-[11px] mt-0.5" style="color: var(--muted)">
-          Scroll to zoom, drag to pan. Shared ancestors merge into one
+          Scroll or use +/− to zoom; drag or use arrow keys to pan. Shared ancestors merge into one
           node with multiple converging arrows.
         </p>
       </div>
       <div class="flex items-center gap-2">
+        <button class="icon-button compact-icon-button" aria-label="Zoom in" onclick={() => zoom=Math.min(4,zoom*1.1)}>+</button>
+        <button class="icon-button compact-icon-button" aria-label="Zoom out" onclick={() => zoom=Math.max(.3,zoom/1.1)}>−</button>
         <button
           type="button"
           class="text-[11px] underline"
@@ -243,28 +232,33 @@
         >
           reset
         </button>
-        <button
-          type="button"
-          onclick={onClose}
-          class="text-base px-2 leading-none"
-          style="color: var(--muted)"
-          aria-label="Close"
-        >
-          ✕
-        </button>
+
       </div>
     </div>
 
     {#if peers.length === 0}
       <p class="text-xs" style="color: var(--muted)">No peers configured.</p>
     {:else}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- The focusable graph viewport supports keyboard pan and touch pointer capture. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div
-        style="height: 420px; overflow: hidden; border: 1px solid var(--border); border-radius: 4px; background: rgba(0,0,0,0.04); cursor: {dragging ? 'grabbing' : 'grab'}"
-        onmousedown={onMouseDown}
-        onmousemove={onMouseMove}
-        onmouseup={onMouseUp}
-        onmouseleave={onMouseUp}
+        tabindex="0"
+        role="group"
+        aria-label="Topology viewport; arrow keys pan, Home resets"
+        onkeydown={(event) => {
+          if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home'].includes(event.key)) return;
+          event.preventDefault();
+          if (event.key==='Home') resetView();
+          else if (event.key==='ArrowLeft') panX-=30;
+          else if (event.key==='ArrowRight') panX+=30;
+          else if (event.key==='ArrowUp') panY-=30;
+          else panY+=30;
+        }}
+        style="height: min(420px, 55dvh); touch-action: none; overflow: hidden; border: 1px solid var(--border); border-radius: 4px; background: rgba(0,0,0,0.04); cursor: {dragging ? 'grabbing' : 'grab'}"
+        onpointerdown={onMouseDown}
+        onpointermove={onMouseMove}
+        onpointerup={onMouseUp}
+        onpointercancel={onMouseUp}
         onwheel={onWheel}
       >
         <svg
@@ -341,7 +335,15 @@
         </svg>
       </div>
 
-      <div class="mt-3 text-[11px] grid grid-cols-3 gap-2" style="color: var(--muted)">
+      <details class="mt-2 text-[11px]">
+        <summary>Connections as text</summary>
+        <ul class="mt-1 space-y-1">
+          {#each graph.edges as edge}
+            <li>{graph.nodes.get(edge.from)?.label} → {graph.nodes.get(edge.to)?.label}</li>
+          {/each}
+        </ul>
+      </details>
+      <div class="mt-3 text-[11px] grid grid-cols-1 sm:grid-cols-3 gap-2" style="color: var(--muted)">
         <span class="flex items-center gap-1">
           <span
             class="inline-block rounded"
@@ -365,5 +367,4 @@
         </span>
       </div>
     {/if}
-  </div>
-</div>
+</Modal>

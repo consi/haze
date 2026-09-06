@@ -170,7 +170,8 @@ pub async fn list(
     }
     sql.push_str(" ORDER BY display_name, id");
 
-    let mut q = sqlx::query_as::<_, HostRow>(&sql);
+    // Only constant SQL clauses/placeholders are interpolated; values are bound.
+    let mut q = sqlx::query_as::<_, HostRow>(sqlx::AssertSqlSafe(sql));
     match filter {
         GroupFilter::Uuid(uuid) | GroupFilter::Subtree(uuid) => {
             q = q.bind(uuid.as_bytes().to_vec());
@@ -185,11 +186,12 @@ pub async fn list(
 }
 
 pub async fn get_by_uuid(pool: &SqlitePool, uuid: Uuid) -> Result<Option<Host>, HostError> {
-    let row: Option<HostRow> =
-        sqlx::query_as(&format!("SELECT {SELECT_COLS} FROM hosts WHERE uuid = ?1"))
-            .bind(uuid.as_bytes().to_vec())
-            .fetch_optional(pool)
-            .await?;
+    let row: Option<HostRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT {SELECT_COLS} FROM hosts WHERE uuid = ?1"
+    )))
+    .bind(uuid.as_bytes().to_vec())
+    .fetch_optional(pool)
+    .await?;
     match row {
         Some(r) => {
             let id = r.id;
@@ -507,8 +509,7 @@ async fn fetch_groups_for(
     if host_ids.is_empty() {
         return Ok(HashMap::new());
     }
-    // Sqlite query placeholders: build a comma-separated list. Safe because
-    // we're interpolating i64s, not user input.
+    // Only generated question-mark placeholders are interpolated; IDs are bound.
     let placeholders = std::iter::repeat_n("?", host_ids.len())
         .collect::<Vec<_>>()
         .join(",");
@@ -517,7 +518,8 @@ async fn fetch_groups_for(
          JOIN groups g ON g.id = hg.group_id \
          WHERE hg.host_id IN ({placeholders})"
     );
-    let mut q = sqlx::query_as::<_, (i64, Vec<u8>)>(&sql);
+    // Only constant SQL clauses/placeholders are interpolated; values are bound.
+    let mut q = sqlx::query_as::<_, (i64, Vec<u8>)>(sqlx::AssertSqlSafe(sql));
     for id in host_ids {
         q = q.bind(id);
     }

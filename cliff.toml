@@ -1,0 +1,50 @@
+[changelog]
+header = """
+# Changelog
+
+Notable changes to Haze. Generated from Git history with git-cliff.
+
+"""
+body = """
+{% if version %}## {{ version }} — {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}## Unreleased
+{% endif %}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags }}
+{% for commit in commits %}
+- {% if commit.breaking %}**Breaking:** {% endif %}{{ commit.message | split(pat="\n") | first | upper_first }} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/consi/haze/commit/{{ commit.id }})){% if commit.breaking_description %}
+  {{ commit.breaking_description }}{% endif %}
+{% if commit.body %}
+  {{ commit.body | trim | replace(from="\n", to="\n  ") }}
+{% elif not commit.conventional %}{% set lines = commit.message | split(pat="\n") %}{% if lines | length > 1 %}
+  {{ lines | slice(start=1) | join(sep="\n") | trim | replace(from="\n", to="\n  ") }}
+{% endif %}{% endif %}
+{% endfor %}
+{% endfor %}
+{% if previous.version %}[Compare changes](https://github.com/consi/haze/compare/{{ previous.version }}...{{ version | default(value="HEAD") }})
+{% endif %}
+"""
+trim = true
+postprocessors = [{ pattern = "\n{3,}", replace = "\n\n" }]
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+.*$"
+sort_commits = "oldest"
+commit_parsers = [
+  { message = "^Merge ", skip = true },
+  { message = "(?i)^(security|.*CVE|.*vulnerab)", group = "<!-- 0 -->Security" },
+  { message = "^feat", group = "<!-- 1 -->Features" },
+  { message = "(?i)^(add|allow|enable|implement|support|introduce)\\b", group = "<!-- 1 -->Features" },
+  { message = "(?i)^(fix|patch|repair|recover|heal|prevent)\\b", group = "<!-- 2 -->Fixes" },
+  { message = "^perf", group = "<!-- 3 -->Performance" },
+  { message = "(?i)^(optimize|speed|reduce)\\b", group = "<!-- 3 -->Performance" },
+  { message = "^(build|chore)\\(deps", group = "<!-- 4 -->Dependencies" },
+  { message = "(?i)^(bump|upgrade|update dependencies)\\b", group = "<!-- 4 -->Dependencies" },
+  { message = "(?i)^(docs|readme)", group = "<!-- 5 -->Documentation" },
+  { message = ".*", group = "<!-- 6 -->Maintenance and improvements" },
+]

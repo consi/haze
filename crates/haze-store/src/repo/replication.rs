@@ -21,6 +21,7 @@
 //! awkward inside `UNIQUE` constraints, and the zero UUID is otherwise
 //! unused since `Uuid::new_v4` can't produce it.
 
+// SQLx 0.9: AssertSqlSafe wraps only static column lists; values stay bound.
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -193,9 +194,9 @@ pub async fn list_peers(
     limit: i64,
     offset: i64,
 ) -> Result<(Vec<ReplicationPeer>, i64), ReplicationError> {
-    let rows: Vec<PeerRow> = sqlx::query_as(&format!(
+    let rows: Vec<PeerRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {PEER_COLS} FROM replication_peers ORDER BY name LIMIT ?1 OFFSET ?2"
-    ))
+    )))
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
@@ -211,9 +212,9 @@ pub async fn list_peers(
 }
 
 pub async fn list_all_peers(pool: &SqlitePool) -> Result<Vec<ReplicationPeer>, ReplicationError> {
-    let rows: Vec<PeerRow> = sqlx::query_as(&format!(
+    let rows: Vec<PeerRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {PEER_COLS} FROM replication_peers ORDER BY id"
-    ))
+    )))
     .fetch_all(pool)
     .await?;
     rows.into_iter().map(|r| r.into_peer()).collect()
@@ -223,9 +224,9 @@ pub async fn get_peer_by_uuid(
     pool: &SqlitePool,
     uuid: Uuid,
 ) -> Result<Option<ReplicationPeer>, ReplicationError> {
-    let row: Option<PeerRow> = sqlx::query_as(&format!(
+    let row: Option<PeerRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {PEER_COLS} FROM replication_peers WHERE uuid = ?1"
-    ))
+    )))
     .bind(uuid_bytes(uuid))
     .fetch_optional(pool)
     .await?;
@@ -236,9 +237,9 @@ pub async fn get_peer_by_id(
     pool: &SqlitePool,
     id: i64,
 ) -> Result<Option<ReplicationPeer>, ReplicationError> {
-    let row: Option<PeerRow> = sqlx::query_as(&format!(
+    let row: Option<PeerRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {PEER_COLS} FROM replication_peers WHERE id = ?1"
-    ))
+    )))
     .bind(id)
     .fetch_optional(pool)
     .await?;
@@ -437,10 +438,10 @@ pub async fn list_rules(
     offset: i64,
 ) -> Result<(Vec<ReplicationRule>, i64), ReplicationError> {
     let (rows, total) = if let Some(pid) = peer_id {
-        let r: Vec<RuleRow> = sqlx::query_as(&format!(
+        let r: Vec<RuleRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT {RULE_COLS} FROM replication_rules WHERE peer_id = ?1 \
              ORDER BY id LIMIT ?2 OFFSET ?3"
-        ))
+        )))
         .bind(pid)
         .bind(limit)
         .bind(offset)
@@ -453,9 +454,9 @@ pub async fn list_rules(
                 .await?;
         (r, t)
     } else {
-        let r: Vec<RuleRow> = sqlx::query_as(&format!(
+        let r: Vec<RuleRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
             "SELECT {RULE_COLS} FROM replication_rules ORDER BY id LIMIT ?1 OFFSET ?2"
-        ))
+        )))
         .bind(limit)
         .bind(offset)
         .fetch_all(pool)
@@ -471,9 +472,9 @@ pub async fn list_rules(
 pub async fn list_enabled_rules(
     pool: &SqlitePool,
 ) -> Result<Vec<ReplicationRule>, ReplicationError> {
-    let rows: Vec<RuleRow> = sqlx::query_as(&format!(
+    let rows: Vec<RuleRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {RULE_COLS} FROM replication_rules WHERE enabled = 1 ORDER BY id"
-    ))
+    )))
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(Into::into).collect())
@@ -483,9 +484,9 @@ pub async fn get_rule_by_uuid(
     pool: &SqlitePool,
     uuid: Uuid,
 ) -> Result<Option<ReplicationRule>, ReplicationError> {
-    let row: Option<RuleRow> = sqlx::query_as(&format!(
+    let row: Option<RuleRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {RULE_COLS} FROM replication_rules WHERE uuid = ?1"
-    ))
+    )))
     .bind(uuid_bytes(uuid))
     .fetch_optional(pool)
     .await?;
@@ -756,10 +757,10 @@ pub async fn upsert_slot(
             .collect::<Vec<_>>(),
     )?;
     let now = Utc::now().timestamp();
-    let existing: Option<SlotRow> = sqlx::query_as(&format!(
+    let existing: Option<SlotRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {SLOT_COLS} FROM replication_slots \
          WHERE peer_instance_uuid = ?1 AND source_group_uuid = ?2"
-    ))
+    )))
     .bind(uuid_bytes(peer_instance_uuid))
     .bind(uuid_bytes(source_group_uuid))
     .fetch_optional(pool)
@@ -850,10 +851,10 @@ pub async fn list_slots(
     limit: i64,
     offset: i64,
 ) -> Result<(Vec<ReplicationSlot>, i64), ReplicationError> {
-    let rows: Vec<SlotRow> = sqlx::query_as(&format!(
+    let rows: Vec<SlotRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {SLOT_COLS} FROM replication_slots ORDER BY peer_label, id \
          LIMIT ?1 OFFSET ?2"
-    ))
+    )))
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
@@ -872,9 +873,9 @@ pub async fn get_slot_by_uuid(
     pool: &SqlitePool,
     slot_uuid: Uuid,
 ) -> Result<Option<ReplicationSlot>, ReplicationError> {
-    let row: Option<SlotRow> = sqlx::query_as(&format!(
+    let row: Option<SlotRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {SLOT_COLS} FROM replication_slots WHERE slot_uuid = ?1"
-    ))
+    )))
     .bind(uuid_bytes(slot_uuid))
     .fetch_optional(pool)
     .await?;

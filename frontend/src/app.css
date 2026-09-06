@@ -13,11 +13,13 @@ body {
 }
 
 [data-theme='dark'] {
+  color-scheme: dark;
   --bg: #0b0d10;
   --fg: #d8dde3;
-  --muted: #6b7480;
+  --muted: #929ba7;
   --border: #1a1f25;
   --accent: #4ea1ff;
+  --on-accent: #0b0d10;
   --latency-good: #58c47a;
   --latency-warn: #d4a83c;
   --latency-bad: #d96a5b;
@@ -26,33 +28,35 @@ body {
   --smoke-inner: #7a828d;
   /* Tooltip text on dark theme - moderately brighter than each band fill so
    * the labels are readable without losing the outer-vs-inner hierarchy. */
-  --smoke-outer-text: #5d6470;
+  --smoke-outer-text: #929ba7;
   --smoke-inner-text: #a4aab4;
-  --btn-bg: #6b7280;
+  --btn-bg: #7a8492;
   --btn-text: #0b0d10;
   /* Replicated host/group name colour. Distinct from `--fg` and `--muted`
    * so an at-a-glance scan tells replicated rows apart from locally-probed
    * ones, while still being legible against `--bg`. */
-  --fg-replicated: #5a6068;
+  --fg-replicated: #929ba7;
 }
 
 [data-theme='light'] {
+  color-scheme: light;
   --bg: #fafbfc;
   --fg: #1a1f25;
-  --muted: #6b7480;
+  --muted: #626c78;
   --border: #e3e6ea;
   --accent: #2a6fd4;
-  --latency-good: #2e8a4f;
-  --latency-warn: #a87a14;
-  --latency-bad: #c44a3b;
+  --on-accent: #ffffff;
+  --latency-good: #26733f;
+  --latency-warn: #886811;
+  --latency-bad: #b43b30;
   --unreachable: #e8cccc;
   --smoke-outer: #e2e5e7;
   --smoke-inner: #a0a5ab;
   /* Tooltip text - moderately darker than each band fill, preserving the
    * "outer lighter than inner" hierarchy. ~30 % darker rather than the
    * previous ~50 %, so they don't collapse into the same mid-gray. */
-  --smoke-outer-text: #9ea0a2;
-  --smoke-inner-text: #707377;
+  --smoke-outer-text: #626c78;
+  --smoke-inner-text: #535d68;
   /* Primary action button colour. Neutral gray, plenty of contrast against
    * white text - not so washed-out that the button blends with surrounding
    * borders, not so dark that it reads as "danger". */
@@ -66,6 +70,66 @@ body {
 body {
   background: var(--bg);
   color: var(--fg);
+}
+
+/* Native scrolling, with a quiet track in both axes. Firefox chooses its
+ * own thin width; engines with scrollbar pseudo-elements use two pixels. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 55%, var(--bg)) transparent;
+}
+@supports selector(::-webkit-scrollbar) {
+  * { scrollbar-width: auto; scrollbar-color: auto; }
+  ::-webkit-scrollbar { width: 2px; height: 2px; }
+  ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--muted) 55%, var(--bg));
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+  ::-webkit-scrollbar-button { display: none; }
+}
+
+:where(input, select, textarea) { min-width: 0; max-width: 100%; accent-color: var(--accent); }
+:where(.flex, .grid) > :where(div, section, label, fieldset) { min-width: 0; }
+:where(h1, h2, h3, p, label) { overflow-wrap: anywhere; }
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+:where(button) { cursor: pointer; min-width: 24px; min-height: 24px; }
+:where(button:disabled) { cursor: default; opacity: .5; }
+:where(.overflow-x-auto) { max-width: 100%; }
+
+/* The glyph stays small; the whole transparent button is clickable. */
+button.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 3px;
+}
+button.compact-icon-button { width: 24px; height: 24px; min-width: 24px; }
+button.icon-button:hover { background: color-mix(in srgb, var(--muted) 12%, transparent); }
+button.icon-button:active { background: color-mix(in srgb, var(--muted) 20%, transparent); }
+@media (pointer: coarse), (max-width: 767px) {
+  button.icon-button { width: 44px; height: 44px; min-width: 44px; }
+  :where(button:not(.event-row), input:not([type='checkbox']):not([type='radio']), select) { min-height: 36px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; scrollbar-width: auto; }
+  :focus-visible { outline-color: Highlight; }
+  button { border: 1px solid ButtonText; }
 }
 
 code,

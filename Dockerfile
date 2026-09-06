@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 
 # Multi-arch image built from the pre-compiled static musl binaries that
 # the release workflow drops into ./dist/ before invoking buildx.
 # Expected names: haze-x86_64-unknown-linux-musl, haze-aarch64-unknown-linux-musl.
 
-FROM --platform=$BUILDPLATFORM alpine:3 AS picker
+FROM --platform=$BUILDPLATFORM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS picker
 ARG TARGETARCH
 # `libcap` provides `setcap`; we use it below to set CAP_NET_RAW on the
 # binary so the non-root distroless runtime can open ICMP sockets for
@@ -31,7 +31,7 @@ RUN set -eux; \
     # mount-point is materialised at first run.
     mkdir -p /var-lib-haze-skel
 
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:1c2c046bc09ed40fad370b599a0b1ae7987f55b01e247cf27a7c27cd97e5bbc7
 
 LABEL org.opencontainers.image.source="https://github.com/consi/haze"
 LABEL org.opencontainers.image.description="Haze — network latency monitor with embedded UI"

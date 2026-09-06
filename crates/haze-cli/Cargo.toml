@@ -28,7 +28,7 @@ tracing-subscriber = { workspace = true }
 # Force the vendored feature so static musl release builds compile OpenSSL from
 # source instead of looking for libssl-dev on the host. Cargo's feature
 # unification makes this propagate to every consumer of openssl-sys.
-openssl-sys = { version = "0.9", features = ["vendored"] }
+openssl-sys = { version = "0.9.117", features = ["vendored"] }
 
 # ─── Packaging metadata ─────────────────────────────────────────────────────
 # Consumed by `cargo deb` and `cargo generate-rpm` during release builds.
@@ -52,6 +52,7 @@ assets = [
     ["../../packaging/haze.env.example", "etc/haze/haze.env.example", "644"],
     ["../../LICENSE", "usr/share/doc/haze/LICENSE", "644"],
     ["../../README.md", "usr/share/doc/haze/README.md", "644"],
+    ["../../CHANGELOG.md", "usr/share/doc/haze/CHANGELOG.md", "644"],
 ]
 conf-files = ["/etc/haze/haze.env.example"]
 
@@ -70,6 +71,7 @@ assets = [
     { source = "packaging/haze.env.example", dest = "/etc/haze/haze.env.example", mode = "644", config = true },
     { source = "LICENSE", dest = "/usr/share/doc/haze/LICENSE", mode = "644", doc = true },
     { source = "README.md", dest = "/usr/share/doc/haze/README.md", mode = "644", doc = true },
+    { source = "CHANGELOG.md", dest = "/usr/share/doc/haze/CHANGELOG.md", mode = "644", doc = true },
 ]
 auto-req = "no"
 auto-prov = "no"

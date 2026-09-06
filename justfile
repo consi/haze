@@ -25,7 +25,11 @@ setup:
 # Install rust toolchain components + a couple of cargo dev tools.
 setup-tools:
     rustup component add rustfmt clippy
-    cargo install --locked cargo-deny cargo-audit cargo-nextest cargo-zigbuild
+    cargo install --locked cargo-deny --version 0.20.2
+    cargo install --locked cargo-audit --version 0.22.2
+    cargo install --locked cargo-nextest --version 0.9.143
+    cargo install --locked cargo-zigbuild --version 0.23.3
+    cargo install --locked git-cliff --version 2.13.1
 
 # ─── Dev loop (two terminals) ───────────────────────────────────────────────
 
@@ -158,3 +162,15 @@ clean:
 # Nuke everything (cargo target, frontend build + node_modules, data dir).
 clean-all: clean clean-data
     rm -rf frontend/build frontend/node_modules frontend/.svelte-kit
+
+# Regenerate the complete changelog (install git-cliff 2.13.1 first).
+changelog:
+    git cliff --config cliff.toml --output CHANGELOG.md
+
+# Preview changes since the latest release.
+release-notes:
+    git cliff --config cliff.toml --unreleased
+
+# Verify publication age for every resolved Rust/npm package.
+dependency-age:
+    python3 scripts/check_dependency_age.py

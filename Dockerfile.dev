@@ -1,17 +1,17 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 #
 # Dev-loop Dockerfile for the replication compose test. Builds the
 # frontend + the Rust server from source. Not used by the release
 # pipeline (which packages prebuilt static musl binaries).
 
-FROM node:22-alpine AS frontend-builder
+FROM node:24.20.0-alpine3.24@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS frontend-builder
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM rust:1-bookworm AS rust-builder
+FROM rust:1.98.0-bookworm@sha256:82150a52ec202c1b14d7817e14516c392bb7f5cfebd88f1ed531cb37ebd39922 AS rust-builder
 WORKDIR /build
 # Dependency layer: copy only the manifests so cargo caches a deps-only
 # build that survives source edits.
@@ -21,9 +21,9 @@ COPY migrations/ ./migrations/
 # Frontend build output is what `rust-embed` embeds at compile time
 # (`#[folder = "../../frontend/build"]`).
 COPY --from=frontend-builder /build/frontend/build ./frontend/build
-RUN cargo build --release --bin haze
+RUN cargo build --locked --release --bin haze
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl libcap2-bin \
     && rm -rf /var/lib/apt/lists/*

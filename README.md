@@ -17,6 +17,9 @@
   <a href="https://github.com/consi/haze/pkgs/container/haze"><img src="https://img.shields.io/badge/ghcr.io-consi%2Fhaze-2496ed?logo=docker" alt="Container image"></a>
 </p>
 
+See [Changelog](CHANGELOG.md) for release details and
+[Development and releases](docs/development.md) for dependency vetting and UI checks.
+
 ## Features
 
 - Six probe types:

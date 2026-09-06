@@ -38,37 +38,44 @@ pub async fn collect(
     reply_timeout: Duration,
 ) -> Result<()> {
     let started = chrono::Utc::now().timestamp();
-    let outcome = tokio::time::timeout(timeout, trace(target, reply_timeout)).await;
-    let (hops, reached, error) = match outcome {
-        Ok(Ok((hops, reached))) => (hops, reached, None),
-        Ok(Err(e)) => (Vec::new(), false, Some(e.to_string())),
-        Err(_) => (Vec::new(), false, Some("Trace deadline exceeded".into())),
-    };
+    // Keep measurements outside the cancellable future: a deadline or socket
+    // error must not erase routers that already answered.
+    let (progress, error) = capture_with_deadline(timeout, async |progress: &mut TraceProgress| {
+        trace_into(
+            target,
+            reply_timeout,
+            &mut progress.hops,
+            &mut progress.reached,
+        )
+        .await
+    })
+    .await;
+    let TraceProgress { mut hops, reached } = progress;
+    // Do not invent measurements for TTLs that were never attempted.
+    let attempted = hops.iter().rposition(|h| h.sent > 0).map_or(0, |i| i + 1);
+    hops.truncate(attempted);
     let resolver = resolvers.get(None);
-    let mut path = Vec::new();
-    // Hickory caches positive and negative answers. The trace pool bounds
-    // concurrent lookups; a name can never hold up the next ping sample.
-    for hop in &hops {
-        let mut addresses = Vec::new();
-        for ip in &hop.addresses {
-            let dns = match tokio::time::timeout(
-                Duration::from_millis(250),
-                resolver.reverse_lookup(*ip),
-            )
-            .await
-            {
-                Ok(Ok(names)) => names.answers().iter().find_map(|r| match &r.data {
-                    hickory_resolver::proto::rr::RData::PTR(name) => {
-                        Some(name.to_utf8().trim_end_matches('.').to_owned())
-                    }
+    let path = enrich_path(
+        &hops,
+        |ip| {
+            let resolver = resolver.clone();
+            async move {
+                match tokio::time::timeout(Duration::from_millis(250), resolver.reverse_lookup(ip))
+                    .await
+                {
+                    Ok(Ok(answer)) => answer.answers().iter().find_map(|r| match &r.data {
+                        hickory_resolver::proto::rr::RData::PTR(name) => {
+                            Some(name.to_utf8().trim_end_matches('.').to_owned())
+                        }
+                        _ => None,
+                    }),
                     _ => None,
-                }),
-                _ => None,
-            };
-            addresses.push(json!({"ip":ip.to_string(),"dns":dns}));
-        }
-        path.push(addresses);
-    }
+                }
+            }
+        },
+        Duration::from_secs(1),
+    )
+    .await;
     let context = json!({"target":target.to_string(), "hops":path});
     let previous = store.read_checkpoint(host, "trace-state")?;
     let old = previous.get("context").cloned().unwrap_or(Value::Null);
@@ -80,12 +87,12 @@ pub async fn collect(
         finished,
         "trace",
         context.clone(),
-        json!({"event":event,"started":started,"finished":finished,"previous_observed":previous.get("timestamp"),"reached":reached,"error":error,"hops":measurements}),
+        json!({"event":event,"started":started,"finished":finished,"previous_observed":previous.get("timestamp"),"previous_id":previous.get("id"),"reached":reached,"error":error,"hops":measurements}),
     );
-    let state = json!({"context":context,"timestamp":finished});
+    let state = json!({"context":context,"timestamp":finished,"id":record.id});
     tokio::task::spawn_blocking(move || -> Result<()> {
         store.append_local(record, window)?;
-        if error.is_none() {
+        if error.is_none() && reached {
             store.checkpoint(host, "trace-state", &state)?;
         }
         Ok(())
@@ -93,6 +100,62 @@ pub async fn collect(
     .await??;
     Ok(())
 }
+struct TraceProgress {
+    hops: Vec<Hop>,
+    reached: bool,
+}
+
+async fn capture_with_deadline<F>(timeout: Duration, capture: F) -> (TraceProgress, Option<String>)
+where
+    F: AsyncFnOnce(&mut TraceProgress) -> Result<()>,
+{
+    let mut progress = TraceProgress {
+        hops: (0..HOPS).map(|_| Hop::default()).collect(),
+        reached: false,
+    };
+    let error = match tokio::time::timeout(timeout, capture(&mut progress)).await {
+        Ok(Ok(())) => None,
+        Ok(Err(error)) => Some(error.to_string()),
+        Err(_) => Some("Trace deadline exceeded; partial observations retained".into()),
+    };
+    (progress, error)
+}
+
+// PTR is optional enrichment. Preserve every numeric address, even when
+// lookups fail or the shared budget expires; deduplicate repeated addresses.
+async fn enrich_path<F, Fut>(hops: &[Hop], lookup: F, budget: Duration) -> Vec<Vec<Value>>
+where
+    F: Fn(IpAddr) -> Fut,
+    Fut: std::future::Future<Output = Option<String>>,
+{
+    let addresses: BTreeSet<_> = hops
+        .iter()
+        .flat_map(|h| h.addresses.iter().copied())
+        .collect();
+    let mut names = std::collections::BTreeMap::new();
+    let lookups = futures::stream::iter(addresses)
+        .map(|ip| {
+            let future = lookup(ip);
+            async move { (ip, future.await) }
+        })
+        .buffer_unordered(8);
+    let _ = tokio::time::timeout(budget, async {
+        tokio::pin!(lookups);
+        while let Some((ip, dns)) = lookups.next().await {
+            names.insert(ip, dns);
+        }
+    })
+    .await;
+    hops.iter()
+        .map(|hop| {
+            hop.addresses
+                .iter()
+                .map(|ip| json!({"ip":ip.to_string(),"dns":names.get(ip).and_then(Clone::clone)}))
+                .collect()
+        })
+        .collect()
+}
+
 fn ips(context: &Value) -> Vec<Vec<String>> {
     context
         .get("hops")
@@ -116,7 +179,14 @@ fn ips(context: &Value) -> Vec<Vec<String>> {
 }
 fn classify(old: &Value, new: &Value, failed: bool, reached: bool) -> &'static str {
     if failed {
-        return "trace_failed";
+        return if ips(new).iter().all(Vec::is_empty) {
+            "trace_failed"
+        } else {
+            "incomplete"
+        };
+    }
+    if !reached {
+        return "incomplete";
     }
     if old.is_null() || old.get("target") != new.get("target") {
         return "baseline";
@@ -124,24 +194,27 @@ fn classify(old: &Value, new: &Value, failed: bool, reached: bool) -> &'static s
     let a = ips(old);
     let b = ips(new);
     if a == b {
-        return if reached { "" } else { "incomplete" };
+        return "";
     }
     if a.iter()
         .zip(&b)
         .any(|(x, y)| !x.is_empty() && !y.is_empty() && x != y)
-        || (a.len() != b.len() && reached)
+        || a.len() != b.len()
     {
         "route_changed"
     } else {
         "visibility_changed"
     }
 }
-async fn trace(target: IpAddr, reply_timeout: Duration) -> Result<(Vec<Hop>, bool)> {
+async fn trace_into(
+    target: IpAddr,
+    reply_timeout: Duration,
+    hops: &mut Vec<Hop>,
+    reached: &mut bool,
+) -> Result<()> {
     let client = TraceClient::get(target.is_ipv4())?;
     let ident = TRACE_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let mut hops: Vec<Hop> = (0..HOPS).map(|_| Hop::default()).collect();
     let mut destination_hop = HOPS;
-    let mut reached = false;
     for round in 0..ROUNDS {
         let mut pending = FuturesUnordered::new();
         let mut ttl = 1u16;
@@ -153,7 +226,7 @@ async fn trace(target: IpAddr, reply_timeout: Duration) -> Result<(Vec<Hop>, boo
                     if let Some((hop_ttl,result))=result
                         && let Some((source,elapsed,echo))=result? {
                             let hop=&mut hops[usize::from(hop_ttl-1)];hop.received+=1;hop.total_ms+=elapsed;hop.addresses.insert(source);
-                            if echo {destination_hop=destination_hop.min(hop_ttl);reached=true;}
+                            if echo {destination_hop=destination_hop.min(hop_ttl);*reached=true;}
                     }
                 }
                 _=send_tick.tick(), if ttl<=destination_hop => {
@@ -168,7 +241,7 @@ async fn trace(target: IpAddr, reply_timeout: Duration) -> Result<(Vec<Hop>, boo
         }
     }
     hops.truncate(usize::from(destination_hop));
-    Ok((hops, reached))
+    Ok(())
 }
 
 type ProbeKey = (IpAddr, u16, u16);
@@ -435,15 +508,91 @@ mod tests {
     #[ignore = "Requires CAP_NET_RAW; loopback only"]
     async fn live_loopback() {
         for target in ["127.0.0.1", "::1"] {
-            let (hops, reached) = trace(target.parse().unwrap(), Duration::from_secs(2))
-                .await
-                .unwrap();
+            let mut hops: Vec<Hop> = (0..HOPS).map(|_| Hop::default()).collect();
+            let mut reached = false;
+            trace_into(
+                target.parse().unwrap(),
+                Duration::from_secs(2),
+                &mut hops,
+                &mut reached,
+            )
+            .await
+            .unwrap();
             assert!(reached);
             assert_eq!(hops.len(), 1);
             assert_eq!(hops[0].received, 5);
             eprintln!("{target}: {:.3} ms", hops[0].total_ms / 5.0);
         }
     }
+    #[tokio::test]
+    async fn ptr_failure_and_budget_expiry_preserve_addresses() {
+        let hops = vec![Hop {
+            addresses: [
+                "192.0.2.1".parse().unwrap(),
+                "192.0.2.2".parse().unwrap(),
+                "192.0.2.3".parse().unwrap(),
+            ]
+            .into(),
+            ..Hop::default()
+        }];
+        let path = enrich_path(
+            &hops,
+            |ip| async move {
+                if ip == "192.0.2.1".parse::<IpAddr>().unwrap() {
+                    Some("router.example".into())
+                } else if ip == "192.0.2.2".parse::<IpAddr>().unwrap() {
+                    None
+                } else {
+                    std::future::pending().await
+                }
+            },
+            Duration::from_millis(20),
+        )
+        .await;
+        assert_eq!(path[0].len(), 3);
+        assert_eq!(path[0][0]["dns"], "router.example");
+        assert_eq!(path[0][1]["ip"], "192.0.2.2");
+        assert!(path[0][1]["dns"].is_null());
+        assert_eq!(path[0][2]["ip"], "192.0.2.3");
+        assert!(path[0][2]["dns"].is_null());
+    }
+
+    #[test]
+    fn partial_routes_are_reported_even_on_first_capture_or_deadline() {
+        let partial = json!({"target":"192.0.2.9","hops":[[{"ip":"192.0.2.1"}],[]]});
+        assert_eq!(classify(&Value::Null, &partial, false, false), "incomplete");
+        assert_eq!(classify(&Value::Null, &partial, true, false), "incomplete");
+        assert_eq!(classify(&Value::Null, &partial, true, true), "incomplete");
+        assert_eq!(
+            classify(&Value::Null, &json!({"hops":[]}), true, false),
+            "trace_failed"
+        );
+    }
+
+    #[tokio::test]
+    async fn deadline_retains_transit_observations() {
+        let (progress, error) = capture_with_deadline(
+            Duration::from_millis(10),
+            async |progress: &mut TraceProgress| {
+                progress.hops[0].sent = 1;
+                progress.hops[0].received = 1;
+                progress.hops[0]
+                    .addresses
+                    .insert("192.0.2.1".parse().unwrap());
+                std::future::pending().await
+            },
+        )
+        .await;
+        assert!(error.unwrap().contains("deadline"));
+        assert!(!progress.reached);
+        assert_eq!(progress.hops[0].received, 1);
+        assert!(
+            progress.hops[0]
+                .addresses
+                .contains(&"192.0.2.1".parse().unwrap())
+        );
+    }
+
     #[test]
     fn dns_does_not_change_route() {
         let a = json!({"target":"1","hops":[[{"ip":"2","dns":"old"}]]});
@@ -451,7 +600,7 @@ mod tests {
         assert_eq!(classify(&a, &b, false, true), "");
         assert_eq!(
             classify(&a, &json!({"target":"1","hops":[[]]}), false, false),
-            "visibility_changed"
+            "incomplete"
         );
     }
     #[test]

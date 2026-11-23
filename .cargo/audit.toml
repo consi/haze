@@ -11,8 +11,4 @@
 ignore = [
     # paste, unmaintained. See deny.toml for full rationale.
     "RUSTSEC-2024-0436",
-    # rsa Marvin Attack, no fix available. Pulled into Cargo.lock through
-    # sqlx-macros' MySQL support; Haze enables SQLite only, and cargo-deny's
-    # feature-aware graph confirms the vulnerable crate is not linked.
-    "RUSTSEC-2023-0071",
 ]

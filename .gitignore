@@ -41,3 +41,7 @@ Thumbs.db
 # Python verification tools
 __pycache__/
 *.pyc
+
+# Nix build output
+/result
+/result-*

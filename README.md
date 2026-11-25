@@ -86,6 +86,43 @@ The `--ulimit` flag matches the `LimitNOFILE=65536` the systemd `.deb` install a
 
 `--cap-add NET_RAW` + the `ping_group_range` sysctl let the non-root container open ICMP sockets - required for the `ping` probe. Drop both if you don't need ping probes (you can still use `dns`, `tcp_connect`, `tls_connect`, `http_ttfb`, `http_total`).
 
+### Nix / NixOS
+
+The flake builds Haze from source with the UI embedded. It supports `x86_64-linux`, `aarch64-linux` and `aarch64-darwin`.
+
+```bash
+nix run github:consi/haze                      # run once, data in ./data
+nix profile install github:consi/haze          # install `haze` into your profile
+```
+
+On NixOS, use the `services.haze` module:
+
+```nix
+{
+  inputs.haze.url = "github:consi/haze";
+
+  outputs = { nixpkgs, haze, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      modules = [
+        haze.nixosModules.default
+        {
+          services.haze = {
+            enable = true;
+            host = "0.0.0.0";                       # default 127.0.0.1
+            openFirewall = true;                    # opens services.haze.port (4420)
+            origin = "https://haze.example.com";    # needed for passkeys
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+Module options: `enable`, `package`, `user`, `group`, `host`, `port`, `origin`, `baseUrl`, `dataDir` (default `/var/lib/haze`), `logLevel`, `environmentFile`, `extraEnvironment` and `openFirewall`. The service applies the same sandboxing, `CAP_NET_RAW` and `LimitNOFILE=65536` as the `.deb` unit. Read the first-boot admin password with `journalctl -u haze`.
+
+To use the package in your own flake without the module, add `haze.overlays.default` to your overlays. It provides `pkgs.haze`.
+
 ## Quick start
 
 1. Run the binary or service. Default bind is `127.0.0.1:4420`; override with `HAZE_BIND=0.0.0.0:4420` (or `--bind`) to expose it on the network.
@@ -143,6 +180,8 @@ just setup-tools                                 # installs cargo-zigbuild etc.
 cargo zigbuild --release --target x86_64-unknown-linux-musl -p haze-cli
 cargo zigbuild --release --target aarch64-unknown-linux-musl -p haze-cli
 ```
+
+With Nix, `nix develop` opens a shell with Rust, Node.js 24, `just`, `cargo-nextest`, `cargo-deny`, `cargo-zigbuild` and `zig`. `nix build` puts the binary at `result/bin/haze`. When `frontend/package-lock.json` changes, update `npmDepsHash` in `flake.nix`: set it to `lib.fakeHash`, run `nix build`, and copy the hash from the error message.
 
 ## License
 
